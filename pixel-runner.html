@@ -56,6 +56,26 @@
   .disclaimer-card .warn-body { text-align: left; line-height: 1.8; font-size: 13px; color: #ddd; margin: 12px 0 18px; }
   .disclaimer-card .warn-body p { margin: 8px 0; }
   .disclaimer-card .warn-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+  .disclaimer-card .verify-hint { color: #ffcc88; font-size: 13px; margin: 14px 0 8px; text-align: center; }
+  .disclaimer-card .verify-code {
+    font-family: 'Courier New', monospace;
+    font-size: 38px; font-weight: 700; letter-spacing: 10px;
+    color: #ffe660; text-shadow: 2px 2px 0 #000, 0 0 16px rgba(255,200,60,0.5);
+    background: rgba(40,30,0,0.5); border: 1px dashed #aa8833;
+    border-radius: 6px; padding: 8px 12px; text-align: center; margin: 6px auto;
+    width: fit-content; min-width: 180px; user-select: none;
+  }
+  .disclaimer-card .verify-input {
+    display: block; margin: 10px auto 4px; width: 200px;
+    background: rgba(20,20,40,0.8); border: 2px solid #5566aa;
+    color: #fff; font-size: 22px; font-family: 'Courier New', monospace;
+    text-align: center; letter-spacing: 6px; padding: 8px;
+    border-radius: 6px; outline: none;
+  }
+  .disclaimer-card .verify-input:focus { border-color: #88aaff; box-shadow: 0 0 12px rgba(80,120,255,0.5); }
+  .disclaimer-card .verify-error { color: #ff6666; font-size: 12px; text-align: center; min-height: 16px; margin-top: 4px; }
+  .disclaimer-card.shake { animation: dshake 0.4s; }
+  @keyframes dshake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(6px)} }
   h1, h2, h3 {
     font-family: 'Courier New', monospace;
     letter-spacing: 2px;
@@ -508,10 +528,14 @@
         <p>1. <b>暴力内容告知</b>：本游戏含像素风战斗与攻击画面（挥剑斩怪、爆炸特效等），可能含轻微暴力元素。</p>
         <p>2. <b>光敏性癫痫告知</b>：本游戏含闪烁、快速移动及色彩变换效果（技能光效、火焰跳动、脉冲动画等）。如您患有光敏性癫痫或相关疾病，请谨慎游玩，如感头晕、眼花或不适，请立即停止并闭眼休息。</p>
         <p>3. 未满 18 岁建议在监护人陪同下适度游戏，合理安排时间，切勿沉迷。</p>
-        <p style="color:#ff9988;">点击「确认进入游戏」即表示您已阅读、理解并同意上述告知。</p>
+        <p style="color:#ff9988;">输入正确数字并点击「确认进入游戏」即表示您已阅读、理解并同意上述告知。</p>
       </div>
+      <p class="verify-hint">为确认您已阅读上述告知，请输入下方显示的数字：</p>
+      <div class="verify-code" id="verifyCode">0000</div>
+      <input type="text" id="verifyInput" class="verify-input" inputmode="numeric" maxlength="6" placeholder="在此输入" autocomplete="off">
+      <div class="verify-error" id="verifyError"></div>
       <div class="warn-btns">
-        <button class="btn" id="disclaimerAccept">我已知晓，确认进入游戏</button>
+        <button class="btn" id="disclaimerAccept">确认进入游戏</button>
         <button class="btn ghost" id="disclaimerExit">退出</button>
       </div>
     </div>
@@ -4321,13 +4345,34 @@ Game.init();
   const dm = document.getElementById('disclaimerModal');
   const menu = document.getElementById('menuScreen');
   const exit = document.getElementById('exitScreen');
+  const card = dm.querySelector('.disclaimer-card');
+  const codeEl = document.getElementById('verifyCode');
+  const inputEl = document.getElementById('verifyInput');
+  const errEl = document.getElementById('verifyError');
+  // 生成随机 4 位数字验证码
+  let curCode = '';
+  const genCode = () => {
+    curCode = String(Math.floor(1000 + Math.random()*9000));
+    codeEl.textContent = curCode;
+    inputEl.value = '';
+  };
+  const showModal = () => { genCode(); errEl.textContent = ''; dm.classList.add('show'); setTimeout(()=>inputEl.focus(), 50); };
   // 初始：菜单先隐藏，弹窗显示，用户确认后方可进入
   menu.classList.remove('show');
-  dm.classList.add('show');
-  document.getElementById('disclaimerAccept').onclick = () => {
-    dm.classList.remove('show');
-    menu.classList.add('show');
+  showModal();
+  const tryConfirm = () => {
+    if (inputEl.value.trim() === curCode) {
+      dm.classList.remove('show');
+      menu.classList.add('show');
+    } else {
+      errEl.textContent = '数字不正确，请重新输入下方数字';
+      card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+      genCode();
+      inputEl.focus();
+    }
   };
+  document.getElementById('disclaimerAccept').onclick = tryConfirm;
+  inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryConfirm(); });
   document.getElementById('disclaimerExit').onclick = () => {
     dm.classList.remove('show');
     menu.classList.remove('show');
@@ -4335,7 +4380,7 @@ Game.init();
   };
   document.getElementById('exitReenter').onclick = () => {
     exit.classList.remove('show');
-    dm.classList.add('show');
+    showModal();
   };
 })();
 </script>
