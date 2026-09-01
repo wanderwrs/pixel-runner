@@ -34,6 +34,28 @@
     z-index: 10;
   }
   .overlay.show { display: flex; flex-direction: column; }
+
+  /* ===== 开始前免责告知弹窗 ===== */
+  .disclaimer-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    display: none;
+    background: rgba(0, 0, 0, 0.96);
+    padding: 24px; overflow-y: auto;
+    align-items: center; justify-content: center;
+  }
+  .disclaimer-overlay.show { display: flex; }
+  .disclaimer-card {
+    max-width: 560px; width: 100%;
+    background: linear-gradient(180deg, #14142a, #0a0a18);
+    border: 2px solid #ff6644;
+    border-radius: 10px; padding: 26px 24px;
+    text-align: center; box-shadow: 0 0 40px rgba(255,80,40,0.4);
+  }
+  .disclaimer-card .warn-icon { font-size: 42px; margin-bottom: 6px; }
+  .disclaimer-card h2 { color: #ffaa66; margin: 0 0 14px; }
+  .disclaimer-card .warn-body { text-align: left; line-height: 1.8; font-size: 13px; color: #ddd; margin: 12px 0 18px; }
+  .disclaimer-card .warn-body p { margin: 8px 0; }
+  .disclaimer-card .warn-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
   h1, h2, h3 {
     font-family: 'Courier New', monospace;
     letter-spacing: 2px;
@@ -474,6 +496,32 @@
     <div class="tc-group">
       <div class="tc-btn" id="tcDodge"><div><div class="tc-ico">↓</div><div class="tc-label">躲避</div></div></div>
       <div class="tc-btn" id="tcJump"><div><div class="tc-ico">↑</div><div class="tc-label">跳跃</div></div></div>
+    </div>
+  </div>
+
+  <!-- 开始前免责告知弹窗 -->
+  <div class="disclaimer-overlay" id="disclaimerModal">
+    <div class="disclaimer-card">
+      <div class="warn-icon">⚠️</div>
+      <h2>开始前请确认</h2>
+      <div class="warn-body">
+        <p>1. <b>暴力内容告知</b>：本游戏含像素风战斗与攻击画面（挥剑斩怪、爆炸特效等），可能含轻微暴力元素。</p>
+        <p>2. <b>光敏性癫痫告知</b>：本游戏含闪烁、快速移动及色彩变换效果（技能光效、火焰跳动、脉冲动画等）。如您患有光敏性癫痫或相关疾病，请谨慎游玩，如感头晕、眼花或不适，请立即停止并闭眼休息。</p>
+        <p>3. 未满 18 岁建议在监护人陪同下适度游戏，合理安排时间，切勿沉迷。</p>
+        <p style="color:#ff9988;">点击「确认进入游戏」即表示您已阅读、理解并同意上述告知。</p>
+      </div>
+      <div class="warn-btns">
+        <button class="btn" id="disclaimerAccept">我已知晓，确认进入游戏</button>
+        <button class="btn ghost" id="disclaimerExit">退出</button>
+      </div>
+    </div>
+  </div>
+  <!-- 退出页 -->
+  <div class="overlay" id="exitScreen" style="z-index:1001;">
+    <div class="center" style="margin:auto; text-align:center;">
+      <h2 style="color:#ffaa66;">您已选择退出</h2>
+      <p style="margin-top:16px; color:#ccc;">感谢您的关注，可安全关闭此页面。</p>
+      <button class="btn" style="margin-top:24px;" id="exitReenter">重新查看告知</button>
     </div>
   </div>
 
@@ -4267,6 +4315,29 @@ function aabb(x1,y1,w1,h1,x2,y2,w2,h2) {
 Data.load();
 UI.init();
 Game.init();
+
+/* ---------- 开始前免责告知 ---------- */
+(function(){
+  const dm = document.getElementById('disclaimerModal');
+  const menu = document.getElementById('menuScreen');
+  const exit = document.getElementById('exitScreen');
+  // 初始：菜单先隐藏，弹窗显示，用户确认后方可进入
+  menu.classList.remove('show');
+  dm.classList.add('show');
+  document.getElementById('disclaimerAccept').onclick = () => {
+    dm.classList.remove('show');
+    menu.classList.add('show');
+  };
+  document.getElementById('disclaimerExit').onclick = () => {
+    dm.classList.remove('show');
+    menu.classList.remove('show');
+    exit.classList.add('show');
+  };
+  document.getElementById('exitReenter').onclick = () => {
+    exit.classList.remove('show');
+    dm.classList.add('show');
+  };
+})();
 </script>
 </body>
 </html>
