@@ -199,6 +199,20 @@
     font-weight: 600;
     text-align: center;
   }
+  .skill-cooldown {
+    margin-top: 4px;
+    padding: 3px 10px;
+    border: 1px solid #4488ff;
+    border-radius: 4px;
+    background: linear-gradient(180deg, rgba(20,30,70,0.7), rgba(10,15,40,0.6));
+    color: #9bd0ff;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 1px;
+    animation: cdpulse 1s infinite alternate;
+  }
+  @keyframes cdpulse { from{opacity:0.7} to{opacity:1} }
 
   /* Difficulty HUD (center) */
   .diff-hud { min-width: 360px; text-align: center; }
@@ -423,6 +437,7 @@
       <div class="hud-stat" id="hudSpeed">⚡ 速度 <span class="v" id="hudSpeedNum">1.00x</span></div>
       <div class="hud-stat">🔥 技能能量</div>
       <div class="skill-bar"><div id="skillFill" class="skill-bar-fill" style="width:0%"></div></div>
+      <div id="skillCooldown"></div>
       <div id="activeSkillDisplay"></div>
     </div>
   </div>
@@ -720,7 +735,7 @@ const UI = {
     upgradesGrid: null, skillsGrid: null, skinsGrid: null,
     bgGrid: null,
     hudCoins: null, hudDist: null, hudKill: null, hudHp: null, hudHpHearts: null, hudTimer: null,
-    hudSpeed: null, hudSpeedNum: null, skillFill: null, activeSkillDisplay: null,
+    hudSpeed: null, hudSpeedNum: null, skillFill: null, skillCooldown: null, activeSkillDisplay: null,
     hudDiffNum: null, hudDiffTier: null, hudDiffBar: null, hudDiffNext: null, hudDiffStage: null, hudDiffSpeed: null,
     goCoins: null, goDist: null, goKill: null, goSpeed: null,
     // 模式 & 托管
@@ -1066,7 +1081,7 @@ const UI = {
     });
   },
 
-  updateHUD({coins,dist,kill,hp,maxHp,speed,speedMul,skillEnergy,skillMax,activeSkill,activeSkillRemain,difficulty,now,startTime,nextDiffAt,mode,autoPilot,powerup}) {
+  updateHUD({coins,dist,kill,hp,maxHp,speed,speedMul,skillEnergy,skillMax,skillCooldownUntil,activeSkill,activeSkillRemain,difficulty,now,startTime,nextDiffAt,mode,autoPilot,powerup}) {
     if (this.ids.hudCoins) this.ids.hudCoins.textContent = coins;
     if (this.ids.hudDist)  this.ids.hudDist.textContent  = dist;
     if (this.ids.hudKill)  this.ids.hudKill.textContent  = kill;
@@ -1094,6 +1109,17 @@ const UI = {
     const pct = Math.max(0, Math.min(100, skillEnergy/skillMax*100));
     const fill = this.ids.skillFill;
     if (fill) { fill.style.width = pct+'%'; fill.classList.toggle('ready', pct>=100); }
+    // ---------- 技能冷却倒计时 ----------
+    const cd = this.ids.skillCooldown;
+    if (cd) {
+      const cdRemain = skillCooldownUntil ? Math.max(0, skillCooldownUntil - now) : 0;
+      if (cdRemain > 0) {
+        cd.style.display = 'block';
+        cd.textContent = `❄ 冷却 ${(cdRemain/1000).toFixed(1)}s`;
+      } else {
+        cd.style.display = 'none';
+      }
+    }
     const as = this.ids.activeSkillDisplay;
     if (as) {
       if (activeSkill) {
@@ -2503,6 +2529,7 @@ const Game = {
       hp: s.hp, maxHp: s.maxHp,
       speed: s.speed, speedMul: s.speedMul,
       skillEnergy: s.skillEnergy, skillMax: s.skillMax,
+      skillCooldownUntil: s.skillCooldownUntil,
       activeSkill: s.activeSkill,
       activeSkillRemain: s.activeSkill ? Math.max(0,s.activeSkillUntil-now) : 0,
       difficulty: s.difficulty,
