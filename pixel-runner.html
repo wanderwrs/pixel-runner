@@ -3903,16 +3903,16 @@ const Render = {
     const isJump = !p.onGround;
     const isSlide = p.sliding;
 
-    // 基础人物色板（可按皮肤覆盖）
+    // 基础人物色板（可按皮肤覆盖）—— AI 原创设计，每皮肤独特色彩与配饰
     const palette = {
-      default:{body:'#5577dd', skin:'#ffcc99', hair:'#332211', pant:'#223366', shoe:'#111'},
-      ninja:  {body:'#222222', skin:'#ffcc99', hair:'#111',    pant:'#111111', shoe:'#222', scarf:'#cc2222'},
-      knight: {body:'#aabbcc', skin:'#ffcc99', hair:'#aa7722', pant:'#556677', shoe:'#333', helm:'#ddeeff'},
-      robot:  {body:'#66aadd', skin:'#aaccee', hair:'#8899aa', pant:'#334455', shoe:'#222', eye:'#ff0'},
-      wizard: {body:'#6633aa', skin:'#ffcc99', hair:'#eeee88', pant:'#331166', shoe:'#220011', hat:'#441188'},
-      dragon: {body:'#cc4422', skin:'#ffaa66', hair:'#221100', pant:'#441100', shoe:'#110000', scale:'#ffdd44'},
-      phoenix:{body:'#ff5522', skin:'#ffcc99', hair:'#ffcc00', pant:'#aa2200', shoe:'#551100', fire:'#ffff66'},
-    }[id] || {body:'#5577dd', skin:'#ffcc99', hair:'#332211', pant:'#223366', shoe:'#111'};
+      default:{body:'#3a78d8', body2:'#2a5cb0', skin:'#ffcc99', hair:'#5a3a1a', pant:'#223366', shoe:'#111', emblem:'#ffe660', belt:'#caa040'},
+      ninja:  {body:'#1a1a26', body2:'#0d0d14', skin:'#e8b896', hair:'#0a0a0a', pant:'#111118', shoe:'#1a1a22', scarf:'#cc2244', mask:'#2a2a36'},
+      knight: {body:'#9aa8b8', body2:'#6a7888', skin:'#ffcc99', hair:'#aa7722', pant:'#556677', shoe:'#333', helm:'#c0d0e0', plume:'#cc3344', trim:'#ddc040'},
+      robot:  {body:'#5a8ab0', body2:'#3a5a78', skin:'#aaccee', hair:'#8899aa', pant:'#334455', shoe:'#222', eye:'#ff3030', core:'#33ddff'},
+      wizard: {body:'#5a2a8a', body2:'#3a1a5a', skin:'#e8b896', hair:'#e8e877', pant:'#331166', shoe:'#220011', hat:'#441188', orb:'#88ffdd', star:'#ffeeaa'},
+      dragon: {body:'#c83020', body2:'#882010', skin:'#d89866', hair:'#221100', pant:'#441100', shoe:'#110000', scale:'#ffbb33', horn:'#e8d8a0', eye2:'#ffaa00'},
+      phoenix:{body:'#ff4422', body2:'#bb2210', skin:'#ffcc99', hair:'#ffcc00', pant:'#aa2200', shoe:'#551100', fire:'#ffff66', feather:'#ffaa44', aura:'#ffdd88'},
+    }[id] || {body:'#3a78d8', body2:'#2a5cb0', skin:'#ffcc99', hair:'#5a3a1a', pant:'#223366', shoe:'#111'};
 
     ctx.save();
     if (hurt) ctx.filter = 'hue-rotate(-30deg) saturate(2) brightness(1.2)';
@@ -3967,11 +3967,46 @@ const Render = {
     // 身体(衣服)
     ctx.fillStyle = hurtCol(palette.body);
     ctx.fillRect(x, bodyY+18, bodyW, bodyH-6);
+    // 身体下半深色阴影（立体感）
+    ctx.fillStyle = hurtCol(palette.body2);
+    ctx.fillRect(x, bodyY+bodyH-10, bodyW, 4);
     // 腰带/装饰
     if (palette.scarf) { ctx.fillStyle = hurtCol(palette.scarf); ctx.fillRect(x-2, bodyY+18, bodyW+4, 4); }
-    if (palette.scale) { // 龙鳞
+    if (palette.belt)  { ctx.fillStyle = hurtCol(palette.belt); ctx.fillRect(x, bodyY+bodyH-6, bodyW, 3); ctx.fillStyle=palette.emblem; ctx.fillRect(x+bodyW/2-2, bodyY+bodyH-7, 4, 4); }
+    if (palette.scale) { // 龙鳞（密集排列）
       ctx.fillStyle = hurtCol(palette.scale);
-      for (let i=0;i<3;i++) ctx.fillRect(x+6+i*8, bodyY+22, 4, 4);
+      for (let i=0;i<3;i++) for (let j=0;j<2;j++) ctx.fillRect(x+6+i*8, bodyY+22+j*6, 4, 4);
+    }
+    // ===== 各皮肤原创配饰细节 =====
+    const now2 = performance.now();
+    if (palette.horn && id==='dragon') { // 龙翼肩鳍
+      ctx.fillStyle = hurtCol(palette.horn);
+      ctx.fillRect(x-5, bodyY+19, 6, 5); ctx.fillRect(x+bodyW-1, bodyY+19, 6, 5);
+    }
+    if (id==='default') { // 英雄徽章（菱形胸章）
+      ctx.fillStyle=palette.emblem; ctx.fillRect(x+bodyW/2-3, bodyY+24, 6, 6);
+      ctx.fillStyle=palette.body2; ctx.fillRect(x+bodyW/2-1, bodyY+26, 2, 2);
+    }
+    if (id==='ninja') { // 面罩 + 腿绑苦无
+      ctx.fillStyle=hurtCol(palette.mask); ctx.fillRect(x+bodyW/2-7, bodyY+13, 14, 5);
+      ctx.fillStyle='#999'; ctx.fillRect(x-2, bodyY+h-bodyH-2, 4, 2); ctx.fillRect(x-4, bodyY+h-bodyH, 2, 6);
+    }
+    if (id==='knight') { // 背盾 + 金边
+      ctx.fillStyle=hurtCol(palette.helm); ctx.fillRect(x-7, bodyY+20, 7, 18);
+      ctx.fillStyle=palette.trim; ctx.fillRect(x-7, bodyY+27, 7, 2); ctx.fillRect(x-4, bodyY+22, 2, 14);
+    }
+    if (id==='robot') { // 胸核脉冲 + 电路纹
+      const pulse=0.4+Math.sin(now2/200)*0.5;
+      ctx.fillStyle=`rgba(51,221,255,${Math.max(0.2,pulse)})`; ctx.fillRect(x+bodyW/2-3, bodyY+24, 6, 6);
+      ctx.fillStyle=palette.body2; ctx.fillRect(x+4, bodyY+20, 2, 10); ctx.fillRect(x+bodyW-6, bodyY+20, 2, 10);
+    }
+    if (id==='wizard') { // 长袍星点 + 法球
+      ctx.fillStyle=palette.star; ctx.fillRect(x+4,bodyY+24,2,2); ctx.fillRect(x+bodyW-8,bodyY+28,2,2); ctx.fillRect(x+bodyW/2,bodyY+32,2,2);
+      const op=0.4+Math.sin(now2/150)*0.4; ctx.fillStyle=`rgba(136,255,221,${Math.max(0.2,op)})`; ctx.fillRect(x-6, bodyY+30, 6, 6);
+    }
+    if (id==='phoenix') { // 翼羽臂饰
+      ctx.fillStyle=hurtCol(palette.feather);
+      for (let i=0;i<3;i++) ctx.fillRect(x-2-i*2, bodyY+19+i*4, 4, 8);
     }
     // 手臂
     ctx.fillStyle = hurtCol(palette.body);
@@ -3997,38 +4032,68 @@ const Render = {
     ctx.fillStyle = hurtCol(palette.hair);
     ctx.fillRect(x+4, bodyY, bodyW-8, 7);
     ctx.fillRect(x+4, bodyY+5, 5, 5);
-    if (palette.helm) {
+    if (palette.helm) { // 骑士头盔：面甲缝 + 红色翎羽
       ctx.fillStyle = hurtCol(palette.helm);
-      ctx.fillRect(x+2, bodyY-2, bodyW-4, 11);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(x+8, bodyY+2, bodyW-16, 4);
+      ctx.fillRect(x+2, bodyY-2, bodyW-4, 13);
+      ctx.fillStyle = '#1a1a22'; ctx.fillRect(x+8, bodyY+4, bodyW-16, 3); // 面甲观察缝
+      ctx.fillStyle = hurtCol(palette.trim); ctx.fillRect(x+2, bodyY-2, bodyW-4, 2); // 金边
+      if (palette.plume) { // 红色翎羽冠饰
+        ctx.fillStyle = hurtCol(palette.plume);
+        ctx.fillRect(x+bodyW/2-2, bodyY-12, 4, 10);
+        ctx.fillRect(x+bodyW/2-5, bodyY-9, 10, 3);
+      }
     }
-    if (palette.hat) {
+    if (palette.hat) { // 法师尖帽：星点装饰
       ctx.fillStyle = hurtCol(palette.hat);
-      ctx.fillRect(x+2, bodyY-10, bodyW-4, 11);
+      ctx.fillRect(x+2, bodyY-12, bodyW-4, 12);
       ctx.fillRect(x-2, bodyY, bodyW+4, 3);
-      // 星星
-      ctx.fillStyle='#ffcc00'; ctx.fillRect(x+bodyW/2-2, bodyY-7, 4, 4);
+      ctx.fillStyle=palette.star; ctx.fillRect(x+6, bodyY-8, 3, 3); ctx.fillRect(x+bodyW-10, bodyY-5, 2, 2);
+      ctx.fillStyle = hurtCol(palette.hair); // 长胡须
+      ctx.fillRect(x+8, bodyY+14, bodyW-16, 6);
     }
-    // 凤凰特效火焰头冠
-    if (palette.fire) {
-      const t = performance.now()/100;
+    if (palette.fire) { // 凤凰火焰头冠（加大版）
+      const t = now2/100;
       ctx.fillStyle = `hsl(${40+Math.sin(t)*20},100%,60%)`;
-      ctx.fillRect(x+6, bodyY-4, 4, 6+Math.sin(t)*2);
-      ctx.fillRect(x+14,bodyY-6, 4, 8+Math.sin(t+1)*3);
-      ctx.fillRect(x+22,bodyY-4, 4, 6+Math.sin(t+2)*2);
+      ctx.fillRect(x+4, bodyY-6, 4, 8+Math.sin(t)*3);
+      ctx.fillRect(x+12,bodyY-9, 4, 11+Math.sin(t+1)*4);
+      ctx.fillRect(x+20,bodyY-6, 4, 8+Math.sin(t+2)*3);
+      ctx.fillRect(x+28,bodyY-4, 4, 6+Math.sin(t+3)*2);
     }
-    // 机器人天线
+    if (palette.horn && id==='dragon') { // 龙角
+      ctx.fillStyle = hurtCol(palette.horn);
+      ctx.fillRect(x+3, bodyY-8, 4, 10); ctx.fillRect(x+5, bodyY-12, 3, 4);
+      ctx.fillRect(x+bodyW-7, bodyY-8, 4, 10); ctx.fillRect(x+bodyW-8, bodyY-12, 3, 4);
+    }
+    if (id==='ninja') { // 忍者头巾飘带（随风摆动）
+      const t2 = now2/120;
+      ctx.fillStyle = hurtCol(palette.scarf);
+      ctx.fillRect(x-6, bodyY+2+Math.sin(t2)*2, 8, 3);
+      ctx.fillRect(x-11, bodyY+6+Math.sin(t2+1)*2, 6, 3);
+    }
+    // 机器人天线（闪烁红灯）
     if (id==='robot') {
       ctx.fillStyle='#88aacc'; ctx.fillRect(x+bodyW/2-1, bodyY-8, 2, 8);
-      ctx.fillStyle=palette.eye; ctx.fillRect(x+bodyW/2-2, bodyY-10, 4, 3);
+      const bl = Math.floor(now2/500)%2;
+      ctx.fillStyle = bl ? '#ff3030' : '#660000';
+      ctx.fillRect(x+bodyW/2-2, bodyY-11, 4, 3);
     }
-    // 眼
-    ctx.fillStyle = (id==='robot') ? palette.eye : '#222';
-    ctx.fillRect(x+10, bodyY+11, 3, 4);
-    ctx.fillRect(x+19, bodyY+11, 3, 4);
+    // 眼（按皮肤差异化）
+    if (id==='robot') { // 单条红色护目镜
+      ctx.fillStyle = palette.eye;
+      ctx.fillRect(x+8, bodyY+10, bodyW-16, 4);
+      ctx.fillStyle = 'rgba(255,200,200,0.6)';
+      ctx.fillRect(x+10, bodyY+11, 3, 1);
+    } else if (id==='dragon') { // 龙眼竖瞳
+      ctx.fillStyle = '#1a1a00'; ctx.fillRect(x+10, bodyY+10, 4, 4); ctx.fillRect(x+19, bodyY+10, 4, 4);
+      ctx.fillStyle = palette.eye2; ctx.fillRect(x+11, bodyY+11, 2, 2); ctx.fillRect(x+20, bodyY+11, 2, 2);
+    } else if (id==='knight') { // 面甲缝已绘，不再画双眼
+    } else {
+      ctx.fillStyle = '#222';
+      ctx.fillRect(x+10, bodyY+11, 3, 4);
+      ctx.fillRect(x+19, bodyY+11, 3, 4);
+    }
     // 嘴
-    ctx.fillStyle='#774422'; ctx.fillRect(x+13, bodyY+16, 6, 2);
+    if (id!=='wizard' && id!=='knight') { ctx.fillStyle='#774422'; ctx.fillRect(x+13, bodyY+16, 6, 2); }
 
     ctx.restore();
   },
