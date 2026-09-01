@@ -387,6 +387,27 @@
     display: none;
   }
   .controls-hint.show { display: block; }
+
+  /* ===== 移动端触屏控制 ===== */
+  .touch-controls {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: none; justify-content: space-between; align-items: flex-end;
+    padding: 14px 22px 20px; z-index: 30; pointer-events: none;
+  }
+  .touch-controls .tc-group { display: flex; gap: 14px; pointer-events: none; }
+  .touch-controls .tc-btn {
+    pointer-events: auto;
+    width: 66px; height: 66px; border-radius: 50%;
+    background: rgba(30,30,60,0.5); border: 2px solid rgba(255,255,255,0.35);
+    color: #fff; font-size: 28px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(2px); transition: transform 0.05s, background 0.05s;
+  }
+  .touch-controls .tc-btn:active { background: rgba(80,120,255,0.7); transform: scale(0.9); }
+  .touch-controls .tc-btn .tc-label { font-size: 9px; opacity: 0.75; margin-top: 1px; }
+  .touch-controls .tc-btn .tc-ico { font-size: 26px; line-height: 1; }
+  body.touch .touch-controls.show { display: flex; }
   kbd {
     display: inline-block;
     padding: 1px 6px;
@@ -443,6 +464,17 @@
   </div>
   <div class="controls-hint show" id="controlsHint">
     <kbd>空格</kbd>/<kbd>↑</kbd> 跳跃 &nbsp; <kbd>↓</kbd> 躲避 &nbsp; <kbd>J</kbd> 攻击 &nbsp; <kbd>K</kbd> 释放技能 &nbsp; <kbd>T</kbd> 托管 &nbsp; <kbd>Esc</kbd> 暂停
+  </div>
+  <!-- 移动端触屏控制 -->
+  <div class="touch-controls" id="touchControls">
+    <div class="tc-group">
+      <div class="tc-btn" id="tcAttack"><div><div class="tc-ico">⚔</div><div class="tc-label">攻击</div></div></div>
+      <div class="tc-btn" id="tcSkill"><div><div class="tc-ico">✦</div><div class="tc-label">技能</div></div></div>
+    </div>
+    <div class="tc-group">
+      <div class="tc-btn" id="tcDodge"><div><div class="tc-ico">↓</div><div class="tc-label">躲避</div></div></div>
+      <div class="tc-btn" id="tcJump"><div><div class="tc-ico">↑</div><div class="tc-label">跳跃</div></div></div>
+    </div>
   </div>
 
   <!-- 主菜单 -->
@@ -1313,6 +1345,29 @@ const Game = {
       this.tryAttack();
     });
 
+    // ===== 移动端触屏控制按钮 =====
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      document.body.classList.add('touch');
+    }
+    const tcEl = document.getElementById('touchControls');
+    const tcBind = (id, onDown, onUp) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const down = (e) => { e.preventDefault(); e.stopPropagation(); if (this.state==='playing' && onDown) onDown(); };
+      const up = (e) => { if (e && e.preventDefault) e.preventDefault(); if (this.state==='playing' && onUp) onUp(); };
+      el.addEventListener('touchstart', down, {passive:false});
+      el.addEventListener('touchend', up, {passive:false});
+      el.addEventListener('touchcancel', up, {passive:false});
+      el.addEventListener('mousedown', down);
+      el.addEventListener('mouseup', up);
+      el.addEventListener('mouseleave', up);
+    };
+    tcBind('tcJump',   () => this.tryJump(),      null);
+    tcBind('tcDodge',  () => this.startSlide(),   () => this.endSlide());
+    tcBind('tcAttack', () => this.tryAttack(),    null);
+    tcBind('tcSkill',  () => this.tryUseSkill(),  null);
+    this._touchControlsEl = tcEl;
+
     this.drawMenuBackground();
     requestAnimationFrame(this.loop.bind(this));
   },
@@ -1362,7 +1417,10 @@ const Game = {
     this.state = 'playing';
     UI.show(null);
     document.getElementById('hud').classList.add('show');
+    this._toggleTouch(true);
   },
+  // 移动端触屏按钮显示控制
+  _toggleTouch(show) { if (this._touchControlsEl) this._touchControlsEl.classList.toggle('show', show); },
   // 游戏内切换托管（按 T 或 HUD 按钮）
   toggleAutoPilot(on) {
     const target = (typeof on === 'boolean') ? on : !(this.session && this.session.autoPilot);
@@ -1372,12 +1430,13 @@ const Game = {
     if (target) this.floatText(this.player ? this.player.x : 100, 80, '🤖 托管开启', '#80ffb0');
     else this.floatText(this.player ? this.player.x : 100, 80, '托管关闭', '#ffa860');
   },
-  pause()   { if (this.state==='playing') { this.state='paused'; UI.show('pauseScreen'); } },
-  resume()  { if (this.state==='paused')  { this.state='playing'; UI.show(null); this.lastTime = performance.now(); } },
+  pause()   { if (this.state==='playing') { this.state='paused'; UI.show('pauseScreen'); this._toggleTouch(false); } },
+  resume()  { if (this.state==='paused')  { this.state='playing'; UI.show(null); this.lastTime = performance.now(); this._toggleTouch(true); } },
   restart() { UI.show(null); document.getElementById('gameOverScreen').classList.remove('show'); document.getElementById('pauseScreen').classList.remove('show'); this.start(); },
   quit()    {
     this.state='menu';
     document.getElementById('hud').classList.remove('show');
+    this._toggleTouch(false);
     UI.show('menuScreen');
     this.drawMenuBackground();
   },
@@ -1391,6 +1450,7 @@ const Game = {
     document.getElementById('goKill').textContent  = this.session.kill;
     document.getElementById('goSpeed').textContent = this.session.highestSpeed.toFixed(2)+'x';
     document.getElementById('hud').classList.remove('show');
+    this._toggleTouch(false);
     setTimeout(()=>UI.show('gameOverScreen'), 500);
   },
 
