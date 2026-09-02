@@ -1367,7 +1367,7 @@ const UI = {
     });
   },
 
-  updateHUD({coins,dist,kill,hp,maxHp,speed,speedMul,skillEnergy,skillMax,skillCooldownUntil,activeSkill,activeSkillRemain,difficulty,now,startTime,nextDiffAt,mode,autoPilot,powerup}) {
+  updateHUD({coins,dist,kill,hp,maxHp,speed,speedMul,skillEnergy,skillMax,skillCooldownUntil,activeSkill,activeSkillRemain,difficulty,now,startTime,nextDiffAt,mode,autoPilot,autoTime,powerup}) {
     if (this.ids.hudCoins) this.ids.hudCoins.textContent = coins;
     if (this.ids.hudDist)  this.ids.hudDist.textContent  = dist;
     if (this.ids.hudKill)  this.ids.hudKill.textContent  = kill;
@@ -1467,7 +1467,14 @@ const UI = {
         parts.push('<span class="diff-tier t-2" style="font-size:10px;padding:1px 8px;">🎯 经典</span>');
       }
       if (autoPilot) {
-        parts.push(' <span class="autopilot-badge">🤖 托管中</span>');
+        let badge = ' <span class="autopilot-badge">🤖 托管中</span>';
+        // 经典模式：显示本局托管剩余时长
+        if (mode === 'classic' && autoTime != null) {
+          const remain = Math.max(0, Game.AUTO_LIMIT - autoTime);
+          const mm = Math.floor(remain / 60), ss = Math.floor(remain % 60);
+          badge = ` <span class="autopilot-badge">🤖 托管中 ${mm}:${ss < 10 ? '0' : ''}${ss}</span>`;
+        }
+        parts.push(badge);
       }
       this.ids.hudModeBadge.innerHTML = parts.join(' ');
     }
@@ -1520,6 +1527,8 @@ const Game = {
   get ACCEL()      { return 2.2; },    // 每秒速度增加（保留，仅在技能时保留引用）
   get GRAVITY()    { return 1800; },
   get GROUND_Y()   { return this.H - 80; },
+  // 经典模式：每局托管时长上限（秒）
+  get AUTO_LIMIT() { return 120; },
   // 屏幕内最多怪物上限（含编队中每只小虫）
   get MAX_ENEMIES_ONSCREEN() { return 5; },
   // 每 0.3 难度，每批刷怪数量基数 +0.5
@@ -1654,6 +1663,7 @@ const Game = {
     }
     this._bestMark = Math.floor(best / 30) * 30; // 30m 为档位，跨档才保存
     this._unlockShown = best;                    // 本局已播报的解锁分
+    this.autoExhausted = false;                  // 经典模式：本局托管时长是否已耗尽
     this.buildPlayer();
     const startDiff = this.DIFF_START;
     const mode = (UI.mode === 'infinite') ? 'infinite' : 'classic';
@@ -1673,6 +1683,7 @@ const Game = {
       spawnTimer: 0, coinTimer: 0, enemyTimer: 0, platformTimer: 0, powerupTimer: 0,
       activePowerup: null, // {type:'plane'|'missile'|'nuke', remain:秒, data:{...}}
       nukeFlash: 0,        // 核弹闪光剩余秒
+      autoTime: 0,         // 本局已累计托管秒数（经典模式限时 2 分钟）
     };
     this.session.speedMul = this.session.speed / this.BASE_SPEED;
     // 无限模式：保证起始 HP 就是满的并锁定（hurtPlayer 会进一步拦截伤害）
@@ -1695,17 +1706,40 @@ const Game = {
   _toggleTouch(show) { if (this._touchControlsEl) this._touchControlsEl.classList.toggle('show', show); },
   // 游戏内切换托管（按 T 或 HUD 按钮）
   toggleAutoPilot(on) {
-    const target = (typeof on === 'boolean') ? on : !(this.session && this.session.autoPilot);
-    if (this.session) this.session.autoPilot = target;
+    const s = this.session;
+    const target = (typeof on === 'boolean') ? on : !(s && s.autoPilot);
+    // 经典模式：本局托管时长已用尽则禁止再开启
+    if (target && s && s.mode === 'classic' && this.autoExhausted) {
+      this.floatText(this.player ? this.player.x : 100, 80, '⛔ 本局托管已用尽（2 分钟），下局可再次使用', '#ffa860');
+      return;
+    }
+    if (s) s.autoPilot = target;
     // 同步 UI.preference（下局会沿用）
     UI.setAutoPilot(target);
     if (target) this.floatText(this.player ? this.player.x : 100, 80, '🤖 托管开启', '#80ffb0');
     else this.floatText(this.player ? this.player.x : 100, 80, '托管关闭', '#ffa860');
   },
+  // 强制关闭托管（经典模式限时用尽）
+  forceAutoPilotOff() {
+    const s = this.session;
+    if (s) s.autoPilot = false;
+    UI.setAutoPilot(false);
+    this.autoExhausted = true;
+    this.floatText(this.player ? this.player.x : 100, 80, '⏱ 托管时长用尽（2 分钟），已自动关闭', '#ffa860');
+    this.spawnDust(this.player ? this.player.x + 16 : 100, this.GROUND_Y - 10, 8);
+  },
   pause()   { if (this.state==='playing') { this.state='paused'; UI.show('pauseScreen'); this._toggleTouch(false); } },
   resume()  { if (this.state==='paused')  { this.state='playing'; UI.show(null); this.lastTime = performance.now(); this._toggleTouch(true); } },
   restart() { UI.show(null); document.getElementById('gameOverScreen').classList.remove('show'); document.getElementById('pauseScreen').classList.remove('show'); this.start(); },
   quit()    {
+    const s = this.session;
+    // 无限模式：退出时按「收集金币 × 15%」结算到账
+    if (s && s.mode === 'infinite' && s.coins > 0) {
+      const raw = Math.floor(s.coins);
+      const earned = Math.floor(raw * 0.15);
+      Data.addCoins(earned);
+      alert(`♾ 无限模式结算\n本局收集金币：${raw}\n到账（15%）：${earned}`);
+    }
     this.state='menu';
     document.getElementById('hud').classList.remove('show');
     this._toggleTouch(false);
@@ -1715,7 +1749,9 @@ const Game = {
   gameOver() {
     if (this.state==='over') return;
     this.state='over';
-    const earned = Math.floor(this.session.coins);
+    // 无限模式同样按 15% 结算（当前流程不会触发，双保险）
+    const rate = this.session.mode === 'infinite' ? 0.15 : 1;
+    const earned = Math.floor(this.session.coins * rate);
     Data.addCoins(earned);
     const sc = Math.floor(this.session.dist);
     // 关卡制：结算历史最高分，并统计本局新解锁的背景
@@ -2770,8 +2806,14 @@ const Game = {
     p.hurt          = Math.max(0, p.hurt          - dt*1000);
     p.runAnim += (effSpeed * dt * 0.02);
 
-    // 托管 AI：在动作冷却前做决策
-    if (s.autoPilot) this.autoPilotThink(dt);
+    // 托管 AI：在动作冷却前做决策（经典模式限时 2 分钟/局）
+    if (s.autoPilot) {
+      this.autoPilotThink(dt);
+      if (s.mode === 'classic') {
+        s.autoTime = (s.autoTime || 0) + dt;
+        if (s.autoTime >= this.AUTO_LIMIT) this.forceAutoPilotOff();
+      }
+    }
 
     // 生成实体 —— 密度由难度直接控制
     const d = this.diffNorm(s.difficulty); // 0..1
@@ -3061,6 +3103,7 @@ const Game = {
       startTime: s.startTime,
       mode: s.mode,
       autoPilot: s.autoPilot,
+      autoTime: s.autoTime,
       powerup: s.activePowerup,
     });
   },
