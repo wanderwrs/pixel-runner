@@ -828,6 +828,9 @@ const Config = {
     { id:'volcano',name:'熔岩地狱',  sky:['#330011','#661122'], ground:'#441111', groundDark:'#220000', deco:'lava' },
     { id:'jungle', name:'密林深处',   sky:['#0a4a2a','#1a8a4a','#5ac88a'], ground:'#2a6a1a', groundDark:'#153008', deco:'jungle' },
     { id:'city',   name:'霓虹都市',   sky:['#0a0a2a','#1a1a4a','#3a2a6a'], ground:'#1a1a2a', groundDark:'#0a0a14', deco:'city' },
+    { id:'space',  name:'宇宙空间站', sky:['#05071a','#0a1030','#1a2050'], ground:'#3a3e4a', groundDark:'#1e2230', deco:'station' },
+    { id:'fairy',  name:'童话世界',   sky:['#ffd9f0','#e0c0ff','#ffe8b0'], ground:'#7fd06a', groundDark:'#4a8a3a', deco:'fairy' },
+    { id:'airbase',name:'军用机场',   sky:['#8a9aa8','#aab4be','#c8d0d8'], ground:'#5a6068', groundDark:'#3a4048', deco:'runway' },
   ],
 };
 
@@ -2897,18 +2900,24 @@ const Game = {
 /* ---------- 5. 渲染辅助 ---------- */
 const Render = {
   drawSky(ctx, bg, W, H, scrollX) {
+    const now = performance.now();
     const g = ctx.createLinearGradient(0,0,0,H*0.7);
     bg.sky.forEach((c,i)=>g.addColorStop(i/(bg.sky.length-1), c));
     ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
     // 星星 / 太阳 / 月亮
-    if (bg.id === 'night' || bg.id === 'volcano' || bg.id === 'city') {
+    if (bg.id === 'night' || bg.id === 'volcano' || bg.id === 'city' || bg.id === 'space') {
       ctx.fillStyle = (bg.id==='city') ? 'rgba(255,255,255,0.6)' : '#fff';
-      for (let i=0;i<50;i++) {
+      const starCount = (bg.id==='space') ? 110 : 50;
+      for (let i=0;i<starCount;i++) {
         const x = (i*137 + scrollX*0.03) % W;
-        const y = (i*53) % (H*0.45);
+        const y = (i*53) % (H*0.55);
+        // 空间站：星星轻微闪烁
+        const tw = (bg.id==='space') ? (0.5 + Math.sin(now*0.003+i*1.3)*0.5) : 1;
+        ctx.globalAlpha = tw;
         const s = (i%5===0) ? 2 : 1;
         ctx.fillRect(x, y, s, s);
       }
+      ctx.globalAlpha = 1;
       // 城市远景星点（更暗，像远处灯光）
       if (bg.id === 'city') {
         ctx.fillStyle = 'rgba(255,200,100,0.3)';
@@ -2916,6 +2925,18 @@ const Render = {
           const x = (i*211 + scrollX*0.02) % W;
           const y = (i*89) % (H*0.3);
           ctx.fillRect(x, y, 1, 1);
+        }
+      }
+      // 空间站：远处彩色星云团（柔光）
+      if (bg.id === 'space') {
+        const nebs = [['#5a2a8a',0.10,0.20,80],['#2a5a9a',0.65,0.15,90],['#8a3a6a',0.40,0.35,70]];
+        for (const [col,nx,ny,nr] of nebs) {
+          const cx = (nx*W + scrollX*0.01) % (W+nr*2) - nr;
+          const cy = ny*H;
+          const ng = ctx.createRadialGradient(cx,cy,1,cx,cy,nr);
+          ng.addColorStop(0, col+'55'); ng.addColorStop(1, col+'00');
+          ctx.fillStyle = ng;
+          ctx.fillRect(cx-nr, cy-nr, nr*2, nr*2);
         }
       }
     }
@@ -2947,6 +2968,75 @@ const Render = {
       ctx.fillStyle = 'rgba(150,150,180,0.4)';
       ctx.beginPath(); ctx.arc(W*0.8-6, H*0.15-4, 4, 0, Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.arc(W*0.8+8, H*0.15+6, 3, 0, Math.PI*2); ctx.fill();
+    } else if (bg.id === 'space') {
+      // 空间站：远景地球（蓝色弹珠），缓慢自转的云带
+      const eX = W*0.16, eY = H*0.22, eR = 54;
+      // 大气光晕
+      const eg = ctx.createRadialGradient(eX,eY,eR*0.8, eX,eY,eR+14);
+      eg.addColorStop(0, 'rgba(120,180,255,0.5)');
+      eg.addColorStop(1, 'rgba(120,180,255,0)');
+      ctx.fillStyle = eg;
+      ctx.beginPath(); ctx.arc(eX,eY,eR+14, 0, Math.PI*2); ctx.fill();
+      // 海洋本体
+      ctx.fillStyle = '#2a6ad8';
+      ctx.beginPath(); ctx.arc(eX,eY,eR, 0, Math.PI*2); ctx.fill();
+      // 大陆（用裁剪在圆内画几块绿斑，随时间平移模拟自转）
+      ctx.save();
+      ctx.beginPath(); ctx.arc(eX,eY,eR, 0, Math.PI*2); ctx.clip();
+      ctx.fillStyle = '#3a8a4a';
+      const spin = (now*0.00004) % 1;
+      const conts = [[-30,-12,22,14],[8,-20,18,10],[20,8,26,16],[-12,18,16,12],[-40,4,12,8]];
+      for (const [cx,cy,cw,ch] of conts) {
+        const tx = eX + ((cx + spin*120) % 120) - 60;
+        ctx.beginPath(); ctx.ellipse(tx, eY+cy, cw, ch, 0, 0, Math.PI*2); ctx.fill();
+      }
+      // 云带（半透明白，缓慢漂移）
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      for (let i=0;i<5;i++) {
+        const cy = eY - 24 + i*12 + Math.sin(now*0.0006+i)*3;
+        const cx = eX - eR + ((now*0.02 + i*40) % (eR*2));
+        ctx.fillRect(cx, cy, 28, 4);
+      }
+      // 球体阴影（右下暗）
+      const sh = ctx.createRadialGradient(eX-eR*0.3,eY-eR*0.3,eR*0.2, eX,eY,eR);
+      sh.addColorStop(0, 'rgba(255,255,255,0.18)');
+      sh.addColorStop(1, 'rgba(0,0,0,0.45)');
+      ctx.fillStyle = sh;
+      ctx.beginPath(); ctx.arc(eX,eY,eR, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    } else if (bg.id === 'fairy') {
+      // 童话：彩虹弧 + 柔光太阳
+      const arcs = ['#ff5a7a','#ffaa44','#ffee55','#7adc4a','#4ab8ff','#9a6aff'];
+      const cx = W*0.7, cy = H*0.62;
+      for (let i=0;i<arcs.length;i++) {
+        ctx.strokeStyle = arcs[i]; ctx.lineWidth = 7;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 150 + i*8, Math.PI*1.15, Math.PI*1.85);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // 柔光太阳
+      const sX = W*0.78, sY = H*0.2;
+      const sg = ctx.createRadialGradient(sX,sY,4, sX,sY,60);
+      sg.addColorStop(0, 'rgba(255,250,220,0.95)');
+      sg.addColorStop(0.5, 'rgba(255,230,180,0.5)');
+      sg.addColorStop(1, 'rgba(255,220,200,0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath(); ctx.arc(sX,sY,60, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff6d0';
+      ctx.beginPath(); ctx.arc(sX,sY,22, 0, Math.PI*2); ctx.fill();
+    } else if (bg.id === 'airbase') {
+      // 机场：阴天散射阳光（被云遮挡的朦胧光晕）
+      const sX = W*0.28, sY = H*0.16;
+      const sg = ctx.createRadialGradient(sX,sY,10, sX,sY,120);
+      sg.addColorStop(0, 'rgba(255,250,235,0.5)');
+      sg.addColorStop(0.6, 'rgba(220,225,230,0.2)');
+      sg.addColorStop(1, 'rgba(200,205,210,0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath(); ctx.arc(sX,sY,120, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(245,245,240,0.4)';
+      ctx.beginPath(); ctx.arc(sX,sY,26, 0, Math.PI*2); ctx.fill();
     } else {
       ctx.fillStyle = (bg.id==='night') ? '#eeeeff' : (bg.id==='sunset' ? '#ffffcc' : (bg.id==='volcano' ? '#ff6644' : '#ffffaa'));
       const sunX = W*0.75, sunY = H*0.2;
@@ -2959,6 +3049,9 @@ const Render = {
     const now = performance.now();
     if (bg.id === 'jungle') { this.drawJungleBg(ctx, W, H, scrollX, groundY); return; }
     if (bg.id === 'city')   { this.drawCityBg(ctx, W, H, scrollX, groundY); return; }
+    if (bg.id === 'space')   { this.drawSpaceBg(ctx, W, H, scrollX, groundY); return; }
+    if (bg.id === 'fairy')   { this.drawFairyBg(ctx, W, H, scrollX, groundY); return; }
+    if (bg.id === 'airbase') { this.drawAirbaseBg(ctx, W, H, scrollX, groundY); return; }
     const bid = bg.id;
 
     // === 通用远山 ===
@@ -3394,6 +3487,440 @@ const Render = {
       ctx.fillRect(fx-1, fy-1, 4, 4);
     }
   },
+  // === 宇宙空间站背景 ===
+  drawSpaceBg(ctx, W, H, scrollX, groundY) {
+    const now = performance.now();
+    // 远层：缓慢漂移的小行星带
+    const px1 = -(scrollX*0.05) % 360;
+    ctx.fillStyle = 'rgba(70,72,86,0.7)';
+    for (let i=-1;i<5;i++) {
+      const bx = px1 + i*360;
+      for (let j=0;j<3;j++) {
+        const ax = bx + j*120 + (j*53%40);
+        const ay = 60 + (j*37%80) + Math.sin(now*0.0008+i+j)*6;
+        const ar = 6 + (j*13%6);
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        for (let k=0;k<6;k++) {
+          const ang = k/6*Math.PI*2;
+          const rr = ar*(0.7 + ((k*7+j)%3)*0.15);
+          ctx.lineTo(ax+Math.cos(ang)*rr, ay+Math.sin(ang)*rr);
+        }
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    // 中层：远处卫星/航天器（缓慢横移，带闪烁灯）
+    for (let i=0;i<2;i++) {
+      const satX = ((i*520 + now*0.012) % (W+200)) - 100;
+      const satY = 90 + i*60 + Math.sin(now*0.001+i)*10;
+      // 太阳能板
+      ctx.fillStyle = '#1a3a6a';
+      ctx.fillRect(satX-22, satY-3, 16, 6);
+      ctx.fillRect(satX+6, satY-3, 16, 6);
+      ctx.fillStyle = '#2a5a9a';
+      for (let p=0;p<3;p++){ ctx.fillRect(satX-20+p*5, satY-2, 3, 4); ctx.fillRect(satX+8+p*5, satY-2, 3, 4); }
+      // 主体
+      ctx.fillStyle = '#aab0bc';
+      ctx.fillRect(satX-6, satY-4, 12, 8);
+      ctx.fillStyle = '#444';
+      ctx.fillRect(satX-6, satY-4, 12, 2);
+      // 闪烁信号灯
+      const on = Math.sin(now*0.006+i*2) > 0;
+      ctx.fillStyle = on ? '#ff4444' : '#440000';
+      ctx.fillRect(satX-1, satY-6, 2, 2);
+    }
+    // 近层：空间站主体（旋转环 + 模块 + 太阳能板）
+    const stx = W*0.5 - (scrollX*0.12) % (W+400) + W*0.5;
+    // 空间站重复出现在画面，间距 W+400
+    for (let rep=-1; rep<2; rep++) {
+      const baseX = stx + rep*(W+400);
+      const cy = groundY - 90;
+      // 桁架主梁（横杆）
+      ctx.fillStyle = '#6a6f7a';
+      ctx.fillRect(baseX-110, cy-3, 220, 6);
+      ctx.fillStyle = '#4a4f5a';
+      ctx.fillRect(baseX-110, cy+1, 220, 2);
+      // 桁架网格
+      ctx.fillStyle = '#3a3f4a';
+      for (let s=-100; s<=100; s+=20) ctx.fillRect(baseX+s, cy-4, 2, 8);
+      // 中央加压模块（圆柱）
+      ctx.fillStyle = '#c8ccd4';
+      ctx.fillRect(baseX-26, cy-12, 52, 24);
+      ctx.fillStyle = '#9aa0ac';
+      ctx.fillRect(baseX-26, cy+8, 52, 4);
+      ctx.fillStyle = '#7a8090';
+      ctx.fillRect(baseX-26, cy-12, 52, 2);
+      // 舷窗（发光圆）
+      for (let w=0; w<4; w++) {
+        const wx = baseX-20+w*12;
+        ctx.fillStyle = '#ffee88';
+        ctx.fillRect(wx, cy-4, 6, 6);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(wx+1, cy-3, 2, 2);
+      }
+      // 对接口（两端圆锥）
+      ctx.fillStyle = '#888c96';
+      ctx.beginPath();
+      ctx.moveTo(baseX-26, cy-12); ctx.lineTo(baseX-40, cy); ctx.lineTo(baseX-26, cy+12); ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(baseX+26, cy-12); ctx.lineTo(baseX+40, cy); ctx.lineTo(baseX+26, cy+12); ctx.closePath(); ctx.fill();
+      // 旋转环（两侧各一个，缓慢旋转）
+      for (let side=-1; side<=1; side+=2) {
+        const rx = baseX + side*70, ry = cy;
+        ctx.save();
+        ctx.translate(rx, ry);
+        ctx.rotate(now*0.0008*side);
+        // 环
+        ctx.strokeStyle = '#aab0bc'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(0,0, 26, 0, Math.PI*2); ctx.stroke();
+        ctx.strokeStyle = '#5a606a'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0,0, 22, 0, Math.PI*2); ctx.stroke();
+        // 辐条
+        ctx.strokeStyle = '#7a808c'; ctx.lineWidth = 3;
+        for (let k=0;k<6;k++){
+          const a = k/6*Math.PI*2;
+          ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*22, Math.sin(a)*22); ctx.stroke();
+        }
+        // 环上的舱灯
+        for (let k=0;k<4;k++){
+          const a = k/4*Math.PI*2;
+          ctx.fillStyle = (k%2===0) ? '#ffcc44' : '#44aaff';
+          ctx.beginPath(); ctx.arc(Math.cos(a)*26, Math.sin(a)*26, 2.5, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+      }
+      // 大型太阳能板（两侧伸出）
+      for (let side=-1; side<=1; side+=2) {
+        const pwx = baseX + side*120;
+        // 伸展杆
+        ctx.fillStyle = '#5a5f6a';
+        ctx.fillRect(pwx-(side<0?0:0), cy-1, side*1, 0); // 占位
+        ctx.fillRect(side<0 ? pwx-30 : pwx, cy-1, 30, 2);
+        // 板面（两段，金色网格）
+        for (let seg=0; seg<2; seg++) {
+          const sx = side<0 ? pwx-30-seg*40 : pwx+seg*40;
+          ctx.fillStyle = '#1a2a5a';
+          ctx.fillRect(sx, cy-22, 38, 44);
+          ctx.fillStyle = '#2a4a8a';
+          for (let r=0;r<5;r++) for (let c=0;c<4;c++) {
+            const glint = (Math.sin(now*0.002+r+c+seg) > 0.6) ? '#88bbff' : '#1a3a7a';
+            ctx.fillStyle = glint;
+            ctx.fillRect(sx+2+c*9, cy-20+r*9, 7, 7);
+          }
+          ctx.strokeStyle = '#3a5a9a'; ctx.lineWidth=1;
+          for (let r=0;r<=5;r++){ ctx.beginPath(); ctx.moveTo(sx, cy-22+r*9); ctx.lineTo(sx+38, cy-22+r*9); ctx.stroke(); }
+        }
+      }
+    }
+    // 偶发流星
+    const meteorT = (now*0.0002) % 1;
+    if (meteorT < 0.12) {
+      const mx = W*0.1 + meteorT*W*0.8;
+      const my = H*0.05 + meteorT*H*0.25;
+      const tg = ctx.createLinearGradient(mx, my, mx-50, my-25);
+      tg.addColorStop(0, 'rgba(255,255,255,0.9)');
+      tg.addColorStop(1, 'rgba(180,200,255,0)');
+      ctx.strokeStyle = tg; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx-50, my-25); ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(mx, my, 2, 0, Math.PI*2); ctx.fill();
+    }
+    // 漂浮尘埃粒子
+    for (let i=0;i<14;i++) {
+      const dx = ((i*97 + now*0.02 + scrollX*0.06) % (W+20)) - 10;
+      const dy = 30 + (i*61) % (groundY-40) + Math.sin(now*0.002+i)*8;
+      ctx.fillStyle = 'rgba(200,210,230,'+(0.3+Math.sin(now*0.003+i)*0.2)+')';
+      ctx.fillRect(dx, dy, 1, 1);
+    }
+  },
+  // === 童话世界背景 ===
+  drawFairyBg(ctx, W, H, scrollX, groundY) {
+    const now = performance.now();
+    // 远层：远处童话城堡剪影（尖塔 + 旗帜飘动）
+    const px1 = -(scrollX*0.08) % 520;
+    ctx.fillStyle = 'rgba(150,120,170,0.55)';
+    for (let i=-1;i<4;i++) {
+      const bx = px1 + i*520;
+      const cy = groundY - 30;
+      // 城堡主楼
+      ctx.fillRect(bx+40, cy-90, 60, 90);
+      // 中央高塔
+      ctx.beginPath();
+      ctx.moveTo(bx+60, cy-150); ctx.lineTo(bx+50, cy-90); ctx.lineTo(bx+90, cy-90); ctx.closePath(); ctx.fill();
+      // 两侧尖塔
+      for (let s=0;s<2;s++){
+        const tx = bx + (s===0?10:120);
+        ctx.fillRect(tx, cy-60, 24, 60);
+        ctx.beginPath();
+        ctx.moveTo(tx+12, cy-92); ctx.lineTo(tx, cy-60); ctx.lineTo(tx+24, cy-60); ctx.closePath(); ctx.fill();
+      }
+      // 城墙
+      ctx.fillRect(bx+10, cy-40, 140, 12);
+      // 城垛
+      for (let c=0;c<7;c++) ctx.fillRect(bx+10+c*20, cy-46, 8, 6);
+      // 旗帜（飘动）
+      ctx.fillStyle = '#ff5a8a';
+      for (let fl=0; fl<2; fl++) {
+        const fp = bx + (fl===0?72:22);
+        ctx.fillStyle = '#6a4a2a';
+        ctx.fillRect(fp, cy-(fl===0?150:92), 1, 14);
+        ctx.fillStyle = (fl===0?'#ff5a8a':'#5acaff');
+        const wave = Math.sin(now*0.004+i+fl)*3;
+        ctx.beginPath();
+        ctx.moveTo(fp+1, cy-(fl===0?150:92));
+        ctx.lineTo(fp+14+wave, cy-(fl===0?147:89));
+        ctx.lineTo(fp+1, cy-(fl===0?143:86));
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(150,120,170,0.55)';
+    }
+    // 中层：糖果色圆丘
+    const px2 = -(scrollX*0.18) % 380;
+    const hillCols = ['#8ac0e8','#f0a8d0','#a8e8c0','#e8c898'];
+    for (let i=-1;i<5;i++) {
+      const bx = px2 + i*380;
+      ctx.fillStyle = hillCols[(i+4)%4];
+      ctx.beginPath(); ctx.arc(bx+190, groundY-8, 200, Math.PI, Math.PI*2); ctx.fill();
+      // 丘顶高光
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.beginPath(); ctx.arc(bx+170, groundY-30, 60, Math.PI*1.1, Math.PI*1.6); ctx.fill();
+    }
+    // 近层：巨型蘑菇 + 棒棒糖树（轻微摇摆）
+    const px3 = -(scrollX*0.42) % 240;
+    for (let i=-1;i<7;i++) {
+      const bx = px3 + i*240 + (i%2)*30;
+      const sway = Math.sin(now*0.0015+i)*3;
+      if (i%2===0) {
+        // 蘑菇
+        const mh = 50 + (i%3)*14;
+        // 菌柄
+        ctx.fillStyle = '#f0e0c0';
+        ctx.fillRect(bx+8, groundY-mh+18, 8, mh-18);
+        ctx.fillStyle = '#d8c8a0';
+        ctx.fillRect(bx+8, groundY-mh+18, 3, mh-18);
+        // 菌盖（红色半球 + 白点）
+        ctx.fillStyle = '#d83048';
+        ctx.beginPath();
+        ctx.arc(bx+12, groundY-mh+18, 20, Math.PI, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        for (let d=0; d<5; d++) {
+          ctx.beginPath(); ctx.arc(bx+2+d*5, groundY-mh+12+(d%2)*3, 2, 0, Math.PI*2); ctx.fill();
+        }
+        // 菌盖底阴
+        ctx.fillStyle = '#a02038';
+        ctx.fillRect(bx-7, groundY-mh+16, 38, 3);
+      } else {
+        // 棒棒糖树（螺旋）
+        const th = 70 + (i%3)*16;
+        ctx.fillStyle = '#8a5a2a';
+        ctx.fillRect(bx+10, groundY-th, 4, th);
+        // 树冠（棒棒糖圆盘，旋转螺旋纹）
+        ctx.save();
+        ctx.translate(bx+12, groundY-th+4+sway);
+        ctx.rotate(now*0.0006+i);
+        const cols = ['#ff5a8a','#5acaff','#ffee66'];
+        for (let r=22; r>0; r-=6) {
+          ctx.fillStyle = cols[(r/6|0)%3];
+          ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+        }
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(0,0,3,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+    }
+    // 上升的肥皂泡（半透明，缓慢上飘 + 摇摆）
+    for (let i=0;i<10;i++) {
+      const cyc = (now*0.02 + i*600) % (groundY+40);
+      const bx = (i*97 + Math.sin(now*0.001+i)*20 + scrollX*0.1) % (W+40);
+      const by = groundY - cyc;
+      const br = 6 + (i%3)*3;
+      // 泡身（彩色环）
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI*2); ctx.stroke();
+      // 内部柔光
+      const bg = ctx.createRadialGradient(bx-br*0.4, by-br*0.4, 1, bx, by, br);
+      bg.addColorStop(0, 'rgba(255,255,255,0.35)');
+      bg.addColorStop(0.6, 'rgba(200,220,255,0.08)');
+      bg.addColorStop(1, 'rgba(255,200,230,0.02)');
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI*2); ctx.fill();
+      // 高光点
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fillRect(bx-br*0.5, by-br*0.5, 2, 2);
+    }
+    // 飘落花瓣 + 闪烁星尘
+    for (let i=0;i<16;i++) {
+      const fx = ((i*83 + now*0.04 + scrollX*0.15) % (W+20)) - 10;
+      const fy = ((i*61 + now*0.05) % (groundY));
+      const fl = 0.4 + Math.sin(now*0.005+i)*0.5;
+      ctx.fillStyle = `rgba(255,200,230,${Math.max(0,fl*0.6)})`;
+      ctx.fillRect(fx, fy, 2, 2);
+    }
+    // 飞舞的彩色蝴蝶
+    for (let i=0;i<4;i++) {
+      const bX = ((i*260 + now*0.04) % (W+60)) - 30;
+      const bY = groundY - 70 - (i*19)%50 + Math.sin(now*0.004+i)*12;
+      const wing = Math.sin(now*0.02+i*2)*4;
+      ctx.fillStyle = ['#ff6ab0','#6abeff','#ffd86a','#b06aff'][i];
+      ctx.fillRect(bX-3, bY+wing, 3, 2);
+      ctx.fillRect(bX+1, bY+wing, 3, 2);
+      ctx.fillStyle = '#4a2a4a';
+      ctx.fillRect(bX, bY, 2, 3);
+    }
+  },
+  // === 军用机场背景 ===
+  drawAirbaseBg(ctx, W, H, scrollX, groundY) {
+    const now = performance.now();
+    // 远层：阴沉低云带（缓慢漂移）
+    const px1 = -(scrollX*0.06) % 340;
+    ctx.fillStyle = 'rgba(120,128,140,0.55)';
+    for (let i=-1;i<6;i++) {
+      const bx = px1 + i*340;
+      for (let l=0;l<2;l++){
+        const cy = 40 + l*22 + Math.sin(now*0.0008+i+l)*4;
+        ctx.beginPath();
+        ctx.arc(bx+80, cy, 60, 0, Math.PI*2);
+        ctx.arc(bx+140, cy-6, 50, 0, Math.PI*2);
+        ctx.arc(bx+200, cy+4, 46, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    // 远层：远处山脉/地平线建筑剪影
+    ctx.fillStyle = 'rgba(80,86,96,0.6)';
+    const horOff = -(scrollX*0.1) % 500;
+    for (let i=-1;i<4;i++) {
+      const bx = horOff + i*500;
+      ctx.fillRect(bx, groundY-26, 120, 26);
+      ctx.fillRect(bx+150, groundY-40, 200, 40);
+      ctx.fillRect(bx+380, groundY-20, 80, 20);
+    }
+    // 中层：机库（拱形大建筑）+ 塔台
+    const px2 = -(scrollX*0.2) % 460;
+    for (let i=-1;i<4;i++) {
+      const bx = px2 + i*460;
+      // 机库主体
+      const hh = 70;
+      ctx.fillStyle = '#6a7078';
+      ctx.fillRect(bx, groundY-hh, 140, hh);
+      ctx.fillStyle = '#5a6068';
+      ctx.fillRect(bx, groundY-hh, 140, 8);
+      // 拱形屋顶
+      ctx.fillStyle = '#7a8088';
+      ctx.beginPath();
+      ctx.arc(bx+70, groundY-hh, 70, Math.PI, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#5a606a';
+      ctx.beginPath();
+      ctx.arc(bx+70, groundY-hh+4, 70, Math.PI, Math.PI*2); ctx.fill();
+      // 大门（竖纹）
+      ctx.fillStyle = '#3a4048';
+      ctx.fillRect(bx+40, groundY-50, 60, 50);
+      ctx.strokeStyle = '#2a3038'; ctx.lineWidth=1;
+      for (let s=0;s<6;s++){ ctx.beginPath(); ctx.moveTo(bx+40+s*12, groundY-50); ctx.lineTo(bx+40+s*12, groundY); ctx.stroke(); }
+      // 标号
+      ctx.fillStyle = '#cc4444';
+      ctx.fillRect(bx+58, groundY-66, 24, 8);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(bx+62, groundY-64, 4, 4); ctx.fillRect(bx+68, groundY-64, 4, 4); ctx.fillRect(bx+74, groundY-64, 4, 4);
+    }
+    // 塔台（控制塔，带旋转信标）
+    const tOff = -(scrollX*0.2) % 460;
+    for (let i=-1;i<4;i++) {
+      const bx = tOff + i*460 + 320;
+      // 塔身
+      ctx.fillStyle = '#5a6068';
+      ctx.fillRect(bx, groundY-110, 18, 110);
+      ctx.fillStyle = '#4a5058';
+      ctx.fillRect(bx, groundY-110, 4, 110);
+      // 顶部控制室
+      ctx.fillStyle = '#7a8088';
+      ctx.fillRect(bx-8, groundY-130, 34, 22);
+      ctx.fillStyle = '#2a3040';
+      ctx.fillRect(bx-6, groundY-126, 30, 10); // 观察窗
+      // 玻璃反光
+      ctx.fillStyle = 'rgba(180,200,220,0.4)';
+      ctx.fillRect(bx-6, groundY-126, 14, 4);
+      // 顶部信标（旋转闪烁）
+      const beacon = Math.sin(now*0.006+i*1.7) > 0;
+      ctx.fillStyle = beacon ? '#ff4444' : '#441010';
+      if (beacon) { ctx.shadowColor='#ff4444'; ctx.shadowBlur=8; }
+      ctx.beginPath(); ctx.arc(bx+9, groundY-134, 3, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+      // 信标光晕
+      if (beacon) {
+        ctx.fillStyle = 'rgba(255,60,60,0.15)';
+        ctx.beginPath(); ctx.arc(bx+9, groundY-134, 12, 0, Math.PI*2); ctx.fill();
+      }
+      // 天线
+      ctx.strokeStyle = '#3a3f46'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(bx+9, groundY-134); ctx.lineTo(bx+9, groundY-150); ctx.stroke();
+    }
+    // 中层：停放的战斗机剪影（成排）
+    const px3 = -(scrollX*0.32) % 280;
+    for (let i=-1;i<5;i++) {
+      const bx = px3 + i*280 + (i%2)*40;
+      const jy = groundY - 14;
+      ctx.fillStyle = '#43484f';
+      // 机身
+      ctx.fillRect(bx, jy, 40, 10);
+      // 机头锥
+      ctx.beginPath();
+      ctx.moveTo(bx+40, jy); ctx.lineTo(bx+50, jy+5); ctx.lineTo(bx+40, jy+10); ctx.closePath(); ctx.fill();
+      // 座舱
+      ctx.fillStyle = '#2a3038';
+      ctx.fillRect(bx+22, jy-4, 8, 4);
+      // 主翼
+      ctx.fillStyle = '#3a3f46';
+      ctx.beginPath();
+      ctx.moveTo(bx+8, jy+10); ctx.lineTo(bx+18, jy+18); ctx.lineTo(bx+24, jy+10); ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(bx+8, jy); ctx.lineTo(bx+18, jy-8); ctx.lineTo(bx+24, jy); ctx.closePath(); ctx.fill();
+      // 尾翼
+      ctx.beginPath();
+      ctx.moveTo(bx+2, jy); ctx.lineTo(bx-4, jy-10); ctx.lineTo(bx+6, jy); ctx.closePath(); ctx.fill();
+    }
+    // 远处一架起飞的喷气机（横移 + 尾焰）
+    const jx = ((now*0.06) % (W+160)) - 80;
+    const jy = 70 + Math.sin(now*0.002)*8;
+    // 尾焰
+    const fg = ctx.createLinearGradient(jx-30, jy, jx, jy);
+    fg.addColorStop(0, 'rgba(255,200,80,0)');
+    fg.addColorStop(0.5, 'rgba(255,160,60,0.6)');
+    fg.addColorStop(1, 'rgba(255,240,200,0.9)');
+    ctx.fillStyle = fg;
+    ctx.fillRect(jx-30, jy+1, 30, 3);
+    // 机身
+    ctx.fillStyle = '#5a6068';
+    ctx.fillRect(jx, jy, 26, 4);
+    ctx.beginPath();
+    ctx.moveTo(jx+26, jy); ctx.lineTo(jx+32, jy+2); ctx.lineTo(jx+26, jy+4); ctx.closePath(); ctx.fill();
+    // 翼
+    ctx.fillStyle = '#4a5058';
+    ctx.beginPath();
+    ctx.moveTo(jx+10, jy+4); ctx.lineTo(jx+16, jy+9); ctx.lineTo(jx+18, jy+4); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(jx+10, jy); ctx.lineTo(jx+16, jy-5); ctx.lineTo(jx+18, jy); ctx.closePath(); ctx.fill();
+    // 红绿航行灯（闪烁）
+    const lit = Math.sin(now*0.008) > 0;
+    ctx.fillStyle = lit ? '#ff3030' : '#400';
+    ctx.fillRect(jx+24, jy, 2, 2);
+    ctx.fillStyle = lit ? '#30ff30' : '#030';
+    ctx.fillRect(jx, jy, 2, 2);
+    // 风向袋（随风摆动）
+    const wsx = W*0.85;
+    const wsy = groundY - 120;
+    ctx.fillStyle = '#6a4a2a';
+    ctx.fillRect(wsx, wsy, 2, 30);
+    ctx.fillStyle = '#ff8830';
+    const ws = Math.sin(now*0.003)*12;
+    ctx.beginPath();
+    ctx.moveTo(wsx+2, wsy);
+    ctx.quadraticCurveTo(wsx+20+ws, wsy+6, wsx+36+ws*0.6, wsy+12);
+    ctx.quadraticCurveTo(wsx+20+ws, wsy+18, wsx+2, wsy+24);
+    ctx.closePath(); ctx.fill();
+    // 风袋条纹
+    ctx.fillStyle = '#222';
+    for (let s=0;s<3;s++) ctx.fillRect(wsx+8+s*9, wsy+4+s*1, 2, 16);
+  },
   drawMountain(ctx, x, baseY, w, h) {
     ctx.beginPath();
     ctx.moveTo(x, baseY + 80);
@@ -3436,6 +3963,12 @@ const Render = {
         ctx.fillRect(x+3, groundY+1, 4, 2);
       else if (bid === 'sunset')
         ctx.fillRect(x+3, groundY+1, 4, 2); // 沙滩
+      else if (bid === 'space')
+        ctx.fillRect(x, groundY, 8, 2); // 金属网格线
+      else if (bid === 'fairy')
+        ctx.fillRect(x, groundY, 8, 3); // 魔法草地
+      else if (bid === 'airbase')
+        ctx.fillRect(x, groundY, 16, 2); // 混凝土接缝
       else
         ctx.fillRect(x+3, groundY+1, 4, 2);
     }
@@ -3492,6 +4025,113 @@ const Render = {
       const mOff = -(scrollX*0.7) % 36;
       for (let x=mOff; x<W; x+=36) {
         ctx.fillRect(x, groundY+4, 6, 2);
+      }
+    } else if (bid === 'space') {
+      // 空间站金属地板：网格线 + 黄黑警示条 + 铆钉 + 发光缝
+      ctx.fillStyle = this.shade(bg.ground, 18);
+      const gOff = -(scrollX) % 40;
+      for (let x=gOff; x<W; x+=40) {
+        // 铆钉
+        ctx.fillRect(x+4, groundY+6, 2, 2);
+        ctx.fillRect(x+30, groundY+6, 2, 2);
+        ctx.fillRect(x+4, groundY+22, 2, 2);
+        ctx.fillRect(x+30, groundY+22, 2, 2);
+      }
+      // 黄黑警示斜条（每隔一段）
+      ctx.fillStyle = '#ffcc00';
+      const wOff = -(scrollX) % 120;
+      for (let x=wOff; x<W; x+=120) {
+        ctx.fillRect(x, groundY+10, 40, 4);
+        ctx.fillStyle = '#222'; ctx.fillRect(x+8, groundY+10, 6, 4); ctx.fillRect(x+24, groundY+10, 6, 4);
+        ctx.fillStyle = '#ffcc00';
+      }
+      // 发光缝（蓝色能量线）
+      ctx.fillStyle = 'rgba(80,180,255,0.6)';
+      const eOff = -(scrollX*0.9) % 60;
+      for (let x=eOff; x<W; x+=60) {
+        ctx.fillRect(x, groundY+30, 24, 1);
+      }
+      ctx.fillStyle = 'rgba(80,180,255,0.2)';
+      for (let x=eOff; x<W; x+=60) {
+        ctx.fillRect(x, groundY+29, 24, 3);
+      }
+    } else if (bid === 'fairy') {
+      // 童话草地：花瓣 + 蘑菇小株 + 星点
+      const flowerCols = ['#ff5a8a','#ffd86a','#9a6aff','#5acaff','#ff8a5a'];
+      const fOff = -(scrollX*0.7) % 30;
+      ctx.fillStyle = this.shade(bg.ground, 30);
+      for (let x=fOff; x<W; x+=30) {
+        // 草叶
+        ctx.fillRect(x, groundY-3, 2, 4);
+        ctx.fillRect(x+3, groundY-2, 1, 3);
+        // 花
+        ctx.fillStyle = flowerCols[(x|0)%5];
+        ctx.fillRect(x+2, groundY-4, 3, 3);
+        ctx.fillStyle = '#ffee88';
+        ctx.fillRect(x+3, groundY-3, 1, 1);
+        ctx.fillStyle = this.shade(bg.ground, 30);
+      }
+      // 小蘑菇（地面）
+      const mOff = -(scrollX*0.8) % 70;
+      for (let x=mOff; x<W; x+=70) {
+        ctx.fillStyle = '#f0e0c0';
+        ctx.fillRect(x+4, groundY-6, 3, 6);
+        ctx.fillStyle = '#d83048';
+        ctx.beginPath();
+        ctx.arc(x+5, groundY-6, 4, Math.PI, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x+4, groundY-7, 1, 1); ctx.fillRect(x+6, groundY-7, 1, 1);
+      }
+      // 闪烁星尘（地面发光点）
+      const now = performance.now();
+      for (let i=0;i<10;i++) {
+        const sx = ((i*73 + scrollX*0.5) % W);
+        const fl = 0.3 + Math.sin(now*0.005+i)*0.5;
+        ctx.fillStyle = `rgba(255,240,180,${Math.max(0,fl*0.7)})`;
+        ctx.fillRect(sx, groundY+8+(i%3)*4, 2, 2);
+      }
+    } else if (bid === 'airbase') {
+      // 机场跑道：黄色中线 + 白色边线 + 闪烁跑道灯 + 跑道标号
+      // 黄色中心虚线（快速滚动）
+      ctx.fillStyle = '#ffcc22';
+      const clOff = -(scrollX*1.2) % 30;
+      for (let x=clOff; x<W; x+=30) {
+        ctx.fillRect(x, groundY+8, 18, 3);
+      }
+      // 白色边线（上下两条）
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, groundY+2, W, 2);
+      ctx.fillRect(0, groundY+24, W, 2);
+      // 跑道灯（两侧边缘，闪烁）
+      const now = performance.now();
+      const lOff = -(scrollX) % 50;
+      for (let x=lOff; x<W; x+=50) {
+        const on = (Math.sin(now*0.006+x*0.05) > -0.3);
+        ctx.fillStyle = on ? '#ffee88' : '#553300';
+        ctx.fillRect(x, groundY, 3, 2);
+        ctx.fillRect(x, groundY+26, 3, 2);
+        if (on) {
+          ctx.fillStyle = 'rgba(255,220,120,0.25)';
+          ctx.fillRect(x-2, groundY-1, 7, 4);
+          ctx.fillRect(x-2, groundY+25, 7, 4);
+        }
+      }
+      // 跑道标号（每隔一段画一个"09/27"色块）
+      const nOff = -(scrollX) % 280;
+      ctx.fillStyle = '#ffffff';
+      for (let x=nOff; x<W; x+=280) {
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillText('09', x+20, groundY+14);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('27', x+60, groundY+14);
+      }
+      // 混凝土接缝（深色横纹）
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      const jOff = -(scrollX) % 80;
+      for (let x=jOff; x<W; x+=80) {
+        ctx.fillRect(x, groundY, 2, 28);
       }
     }
     // 像素点阵
