@@ -792,8 +792,8 @@ const Config = {
       apply:(l)=>({coinMagnet: 30 + l*22}) },
     { id:'coinBonus',   name:'金币加成', icon:'💎', desc:'每级+20%金币获得', base:400, mult:1.8, max:5,
       apply:(l)=>({coinBonus: 1 + l*0.2}) },
-    { id:'attackPower', name:'攻击强化', icon:'⚔️', desc:'每级+1攻击范围/伤害', base:500, mult:1.8, max:4,
-      apply:(l)=>({attackRange: 58 + l*14, attackDamage: 1 + l}) },
+    { id:'attackPower', name:'攻击强化', icon:'⚔️', desc:'1-10级，每级+攻击范围与伤害，等级越高攻击越远', base:500, mult:1.6, max:10,
+      apply:(l)=>({attackRange: 58 + l*16, attackDamage: 1 + l}) },
     { id:'startSpeed',  name:'起跑加成', icon:'🚀', desc:'开局速度提升0.2/级', base:600, mult:1.9, max:5,
       apply:(l)=>({startSpeedBoost: l*0.2}) },
     { id:'skillEnergy', name:'技能储能', icon:'🔋', desc:'每级技能充能速度+25%', base:450, mult:1.7, max:5,
@@ -810,13 +810,13 @@ const Config = {
   ],
   // 皮肤
   skins: [
-    { id:'default',  name:'像素战士', icon:'🧑', price:0,    rarity:'common', desc:'默认角色，稳健之选' },
-    { id:'ninja',    name:'忍者',     icon:'🥷', price:500,  rarity:'common', desc:'经典忍者皮肤，敏捷造型' },
-    { id:'knight',   name:'骑士',     icon:'🤺', price:900,  rarity:'common', desc:'中世纪骑士，铁骨铮铮' },
-    { id:'robot',    name:'机甲兵',   icon:'🤖', price:2500, rarity:'rare',   desc:'稀有皮肤 🏅 +金币+5%', bonus:{coinMul:1.05} },
-    { id:'wizard',   name:'法师',     icon:'🧙', price:3200, rarity:'rare',   desc:'稀有皮肤 🏅 技能充能+10%', bonus:{skillChargeMul:1.1} },
-    { id:'dragon',   name:'龙骑士',   icon:'🐉', price:8888, rarity:'legendary', desc:'传奇皮肤 👑 +金币+15% 攻击+1', bonus:{coinMul:1.15,attackExtra:1} },
-    { id:'phoenix',  name:'凤凰使者', icon:'🔥', price:12888, rarity:'legendary', desc:'传奇皮肤 👑 复活+1次/局 +技能持续时间+25%', bonus:{extraLife:1, skillDurMul:1.25} },
+    { id:'default',  name:'像素战士', icon:'🧑', price:0,    rarity:'common', desc:'默认角色，稳健之选', attackType:'melee',  atkStyle:'sword' },
+    { id:'ninja',    name:'忍者',     icon:'🥷', price:500,  rarity:'common', desc:'经典忍者皮肤，敏捷造型', attackType:'ranged', atkStyle:'shuriken' },
+    { id:'knight',   name:'骑士',     icon:'🤺', price:900,  rarity:'common', desc:'中世纪骑士，铁骨铮铮', attackType:'melee',  atkStyle:'lance' },
+    { id:'robot',    name:'机甲兵',   icon:'🤖', price:2500, rarity:'rare',   desc:'稀有皮肤 🏅 +金币+5%', bonus:{coinMul:1.05}, attackType:'ranged', atkStyle:'beam' },
+    { id:'wizard',   name:'法师',     icon:'🧙', price:3200, rarity:'rare',   desc:'稀有皮肤 🏅 技能充能+10%', bonus:{skillChargeMul:1.1}, attackType:'ranged', atkStyle:'orb' },
+    { id:'dragon',   name:'龙骑士',   icon:'🐉', price:8888, rarity:'legendary', desc:'传奇皮肤 👑 +金币+15% 攻击+1', bonus:{coinMul:1.15,attackExtra:1}, attackType:'ranged', atkStyle:'fireball' },
+    { id:'phoenix',  name:'凤凰使者', icon:'🔥', price:12888, rarity:'legendary', desc:'传奇皮肤 👑 复活+1次/局 +技能持续时间+25%', bonus:{extraLife:1, skillDurMul:1.25}, attackType:'ranged', atkStyle:'feather' },
   ],
   // 背景
   backgrounds: [
@@ -1797,11 +1797,20 @@ const Game = {
     const p = this.player;
     if (p.attackCooldown > 0) return;
     p.attackTimer = 220; p.attackCooldown = 380;
-    // 判定命中敌人
-    const ax = p.x + p.w;
-    const ay = p.y;
-    const aw = p.attackRange;
-    const ah = p.h;
+    const skin = Config.skins.find(s => s.id === p.skinId) || Config.skins[0];
+    const atkType = skin.attackType || 'melee';
+    const atkStyle = skin.atkStyle || 'sword';
+    const ax = p.x + p.w, ay = p.y, aw = p.attackRange, ah = p.h;
+
+    if (atkType === 'ranged') {
+      // 远程：发射玩家弹丸（弹丸飞行并命中敌人）
+      this.firePlayerProjectile(p, atkStyle);
+      // 起手能量闪光
+      for (let i=0;i<4;i++) this.particles.push(this.makeParticle(ax+Math.random()*8, ay+ah/2+(Math.random()-0.5)*ah,
+        90+Math.random()*80, (Math.random()-0.5)*60, 220, this.atkColor(atkStyle)));
+      return;
+    }
+    // 近战：即时判定命中敌人
     let hit = false;
     this.world.enemies.forEach(e => {
       if (e.dead) return;
@@ -1823,8 +1832,37 @@ const Game = {
     });
     if (hit) this.screenShake = Math.max(this.screenShake, 2);
     // 攻击特效
+    const sparkColor = atkStyle === 'lance' ? '#ddeeff' : '#ffffaa';
     for (let i=0;i<5;i++) this.particles.push(this.makeParticle(ax+Math.random()*aw, ay+Math.random()*ah,
-      100+Math.random()*120, (Math.random()-0.5)*80, 250, '#ffffaa'));
+      100+Math.random()*120, (Math.random()-0.5)*80, 250, sparkColor));
+  },
+
+  // 各皮肤远程攻击配色
+  atkColor(style) {
+    return ({ shuriken:'#cccccc', beam:'#66ddff', orb:'#cc88ff', fireball:'#ff6633', feather:'#ffaa44' })[style] || '#ffffaa';
+  },
+
+  // 发射玩家远程弹丸
+  firePlayerProjectile(p, style) {
+    const px = p.x + p.w, py = p.y + p.h/2 - 4;
+    const dmg = p.attackDamage;
+    const base = { x: px, y: py, vx: 600, vy: 0, w: 16, h: 16, damage: dmg, life: 2200, owner: 'player', angle: 0, spin: 0, type: style };
+    if (style === 'shuriken') {
+      this.world.projectiles.push({ ...base, w:16, h:16, vx:620 });
+    } else if (style === 'beam') {
+      this.world.projectiles.push({ ...base, w:30, h:6, vx:860, life:1300 });
+    } else if (style === 'orb') {
+      this.world.projectiles.push({ ...base, w:20, h:20, vx:380, life:2600 });
+    } else if (style === 'fireball') {
+      this.world.projectiles.push({ ...base, w:18, h:18, vx:540, life:2000 });
+    } else if (style === 'feather') {
+      // 凤凰：三发散射
+      this.world.projectiles.push({ ...base, w:14, h:14, vx:560, vy:-70 });
+      this.world.projectiles.push({ ...base, w:14, h:14, vx:600, vy:0 });
+      this.world.projectiles.push({ ...base, w:14, h:14, vx:560, vy:70 });
+    } else {
+      this.world.projectiles.push({ ...base });
+    }
   },
   tryUseSkill() {
     const s = this.session;
@@ -1970,7 +2008,8 @@ const Game = {
     this.world.projectiles.push({
       x: fromX, y: fromY,
       vx: dx/d * speed, vy: dy/d * speed * 0.3 - 40,
-      w: 22, h: 4, damage: 1, life: 4000, type:'arrow', angle: Math.atan2(dy, dx)
+      w: 22, h: 4, damage: 1, life: 4000, type:'arrow', angle: Math.atan2(dy, dx),
+      owner: 'enemy', spin: 0
     });
   },
 
@@ -2547,15 +2586,48 @@ const Game = {
     }
     this.world.enemies = this.world.enemies.filter(e => !e.dead || e.deadTime > -500 ? (e.x > -80) : false);
 
-    // 更新弹丸（箭）
+    // 更新弹丸（玩家弹丸 + 敌人箭）
     for (const pr of this.world.projectiles) {
       pr.life -= dt*1000;
-      pr.vy += 260 * dt; // 轻微重力
-      pr.x += pr.vx * dt - effSpeed * dt; // 相对世界左移 + 自身速度
-      pr.y += pr.vy * dt;
-      pr.angle = Math.atan2(pr.vy, pr.vx);
-      if (dashActive) {
-        // 飞速：路径上的箭全部击碎
+      pr.spin = (pr.spin||0) + dt * 18;
+      if (pr.owner === 'player') {
+        // 玩家弹丸：向前飞行（自身速度），同时随世界左移抵消滚动
+        pr.x += pr.vx * dt - effSpeed * dt;
+        pr.y += pr.vy * dt;
+        pr.angle = Math.atan2(pr.vy, pr.vx);
+        // 命中敌人
+        for (const e of this.world.enemies) {
+          if (e.dead) continue;
+          if (aabb(pr.x, pr.y, pr.w, pr.h, e.x, e.y, e.w, e.h)) {
+            e.hp -= pr.damage;
+            e.hurt = 200;
+            pr.dead = true;
+            // 命中火花
+            const c = this.atkColor(pr.type||'orb');
+            for (let i=0;i<5;i++) this.particles.push(this.makeParticle(e.x+e.w/2, e.y+e.h/2,
+              (Math.random()-0.5)*200, (Math.random()-0.5)*160, 260, c));
+            if (e.hp <= 0) {
+              e.dead = true; e.deadTime = -600; s.kill++;
+              s.coins += 2; s.runCoins += 2;
+              s.skillEnergy = Math.min(s.skillMax, s.skillEnergy + 3);
+              this.floatText(e.x+e.w/2, e.y-10, '+2', '#ffe060');
+              this.spawnExplosion(e.x+e.w/2, e.y+e.h/2, c);
+            } else {
+              this.floatText(e.x, e.y-6, '-'+pr.damage, '#ffaa00');
+            }
+            this.screenShake = Math.max(this.screenShake, 2);
+            break;
+          }
+        }
+      } else {
+        // 敌人箭：受重力下坠 + 自身速度 + 世界左移
+        pr.vy += 260 * dt; // 轻微重力
+        pr.x += pr.vx * dt - effSpeed * dt;
+        pr.y += pr.vy * dt;
+        pr.angle = Math.atan2(pr.vy, pr.vx);
+      }
+      if (dashActive && pr.owner !== 'player') {
+        // 飞速：路径上的箭全部击碎（仅敌方弹丸）
         if (aabb(p.x-20, p.y, p.w+100, p.h, pr.x, pr.y-2, pr.w, pr.h+4)) {
           pr.dead = true;
           for (let i=0;i<4;i++) this.particles.push(this.makeParticle(pr.x,pr.y,
@@ -2563,18 +2635,19 @@ const Game = {
         }
       }
     }
-    // 攻击挥舞可以劈掉箭
+    // 攻击挥舞可以劈掉箭（仅敌方弹丸）
     if (p.attackTimer > 100) {
       const ax = p.x + p.w, ay = p.y, aw = p.attackRange, ah = p.h;
       for (const pr of this.world.projectiles) {
-        if (!pr.dead && aabb(ax,ay,aw,ah, pr.x-6, pr.y-6, pr.w+12, pr.h+12)) {
+        if (pr.dead || pr.owner === 'player') continue;
+        if (aabb(ax,ay,aw,ah, pr.x-6, pr.y-6, pr.w+12, pr.h+12)) {
           pr.dead = true;
           for (let i=0;i<4;i++) this.particles.push(this.makeParticle(pr.x,pr.y,
             (Math.random()-0.5)*160, -Math.random()*120, 280, '#ffddaa'));
         }
       }
     }
-    this.world.projectiles = this.world.projectiles.filter(pr => !pr.dead && pr.life > 0 && pr.x > -60 && pr.y < this.H + 60);
+    this.world.projectiles = this.world.projectiles.filter(pr => !pr.dead && pr.life > 0 && pr.x > -60 && pr.x < this.W + 80 && pr.y < this.H + 60);
 
     // ====== 更新道具（移动 + 自动拾取） ======
     const pups = this.world.powerups;
@@ -2626,10 +2699,10 @@ const Game = {
         }
       }
     }
-    // 碰撞检测 - 弹丸
+    // 碰撞检测 - 弹丸（仅敌方弹丸伤害玩家）
     if (!shieldActive && !dashActive) {
       for (const pr of this.world.projectiles) {
-        if (pr.dead) continue;
+        if (pr.dead || pr.owner === 'player') continue;
         if (aabb(p.x+4, p.y+2, p.w-8, p.h-4, pr.x-2, pr.y-2, pr.w, pr.h)) {
           pr.dead = true;
           this.hurtPlayer(pr.damage, 'arrow');
@@ -3460,6 +3533,10 @@ const Render = {
     ctx.fillRect(x, y+h, w, 2);
   },
   drawProjectile(ctx, pr) {
+    if (pr.owner === 'player') {
+      this.drawPlayerProjectile(ctx, pr);
+      return;
+    }
     if (pr.type === 'arrow') {
       ctx.save();
       ctx.translate(pr.x + pr.w/2, pr.y);
@@ -3484,6 +3561,87 @@ const Render = {
       ctx.closePath(); ctx.fill();
       ctx.restore();
     }
+  },
+  // 玩家弹丸：按攻击风格渲染
+  drawPlayerProjectile(ctx, pr) {
+    const cx = pr.x + pr.w/2, cy = pr.y + pr.h/2;
+    const spin = pr.spin || 0;
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (pr.type === 'shuriken') {
+      // 手里剑：旋转四角星
+      ctx.rotate(spin);
+      ctx.fillStyle = '#dddddd';
+      ctx.strokeStyle = '#666'; ctx.lineWidth = 1;
+      for (let i=0;i<4;i++){
+        ctx.save();
+        ctx.rotate(i * Math.PI/2);
+        ctx.beginPath();
+        ctx.moveTo(0,0); ctx.lineTo(8, -2); ctx.lineTo(12, 0); ctx.lineTo(8, 2);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0,0,2,0,Math.PI*2); ctx.fill();
+    } else if (pr.type === 'beam') {
+      // 光束：横向亮线 + 光晕
+      const grd = ctx.createLinearGradient(-pr.w/2, 0, pr.w/2, 0);
+      grd.addColorStop(0, 'rgba(102,221,255,0)');
+      grd.addColorStop(0.5, '#66ddff');
+      grd.addColorStop(1, '#ffffff');
+      ctx.fillStyle = grd;
+      ctx.fillRect(-pr.w/2, -pr.h/2, pr.w, pr.h);
+      // 头部高光
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(pr.w/2-2, 0, pr.h/2+1, 0, Math.PI*2); ctx.fill();
+    } else if (pr.type === 'orb') {
+      // 法球：发光球体
+      const grd = ctx.createRadialGradient(0,0,1, 0,0, pr.w/2+4);
+      grd.addColorStop(0, '#ffffff');
+      grd.addColorStop(0.4, '#cc88ff');
+      grd.addColorStop(1, 'rgba(204,136,255,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(0,0, pr.w/2+4, 0, Math.PI*2); ctx.fill();
+      // 内核脉动
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(0,0, 3 + Math.sin(spin*1.5)*1, 0, Math.PI*2); ctx.fill();
+    } else if (pr.type === 'fireball') {
+      // 火球：旋转火焰
+      ctx.rotate(spin*0.6);
+      const grd = ctx.createRadialGradient(0,0,1, 0,0, pr.w/2+5);
+      grd.addColorStop(0, '#ffe070');
+      grd.addColorStop(0.4, '#ff6633');
+      grd.addColorStop(1, 'rgba(255,80,40,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(0,0, pr.w/2+5, 0, Math.PI*2); ctx.fill();
+      // 火舌
+      ctx.fillStyle = '#ffcc55';
+      for (let i=0;i<5;i++){
+        const ang = i*Math.PI*2/5 + spin;
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(ang)*(pr.w/2+3), Math.sin(ang)*(pr.w/2+3));
+        ctx.lineTo(Math.cos(ang+0.3)*(pr.w/2-2), Math.sin(ang+0.3)*(pr.w/2-2));
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (pr.type === 'feather') {
+      // 羽翼：羽毛形 + 拖尾
+      ctx.rotate(Math.atan2(pr.vy, pr.vx));
+      ctx.fillStyle = '#ffaa44';
+      ctx.strokeStyle = '#cc6622'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-pr.w/2, 0);
+      ctx.quadraticCurveTo(0, -pr.h/2-2, pr.w/2, 0);
+      ctx.quadraticCurveTo(0, pr.h/2+2, -pr.w/2, 0);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      // 羽轴
+      ctx.strokeStyle = '#883300';
+      ctx.beginPath(); ctx.moveTo(-pr.w/2, 0); ctx.lineTo(pr.w/2, 0); ctx.stroke();
+    } else {
+      // 默认弹丸
+      ctx.fillStyle = '#ffffaa';
+      ctx.beginPath(); ctx.arc(0,0, pr.w/2, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
   },
   drawCoin(ctx, c) {
     const spin = Math.abs(Math.sin(c.t*4));
@@ -4171,21 +4329,71 @@ const Render = {
   },
   drawSlash(ctx, p) {
     const a = p.attackTimer / 220;
+    const skin = (window.Config && Config.skins ? Config.skins.find(s => s.id === p.skinId) : null) || {};
+    const atkType = skin.attackType || 'melee';
+    const atkStyle = skin.atkStyle || 'sword';
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(255,255,180,'+ (0.6*a) +')';
     const cx = p.x + p.w;
     const cy = p.y + p.h/2;
+
+    if (atkType === 'ranged') {
+      // 远程：起手能量光球（按风格配色）
+      const col = ({ shuriken:'#cccccc', beam:'#66ddff', orb:'#cc88ff', fireball:'#ff6633', feather:'#ffaa44' })[atkStyle] || '#ffffaa';
+      const r = 10 + (1-a)*8;
+      const grd = ctx.createRadialGradient(cx, cy, 1, cx, cy, r+10);
+      grd.addColorStop(0, col+'ff');
+      grd.addColorStop(0.5, col+'88');
+      grd.addColorStop(1, col+'00');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(cx, cy, r+10, 0, Math.PI*2); ctx.fill();
+      // 中心亮点
+      ctx.fillStyle = '#ffffff'+ Math.floor(a*255).toString(16).padStart(2,'0');
+      ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+      // 三道短能量线
+      ctx.strokeStyle = col; ctx.lineWidth = 2;
+      for (let i=-1;i<=1;i++){
+        ctx.beginPath();
+        ctx.moveTo(cx+4, cy+i*5);
+        ctx.lineTo(cx+14+i*2, cy+i*5);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+
+    // 近战
     const r = p.attackRange * (1.1 - a*0.3);
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, -0.6, 0.6);
-    ctx.lineTo(cx, cy);
-    ctx.closePath(); ctx.fill();
-    // 刀光线条
-    ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r*0.9, -0.4, 0.4);
-    ctx.stroke();
+    if (atkStyle === 'lance') {
+      // 骑士长枪：直线突刺 + 枪尖闪光
+      ctx.strokeStyle = `rgba(255,255,255,${a})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + r*1.1, cy);
+      ctx.stroke();
+      // 枪尖三角
+      ctx.fillStyle = `rgba(220,235,255,${a})`;
+      ctx.beginPath();
+      ctx.moveTo(cx + r*1.1 + 8, cy);
+      ctx.lineTo(cx + r*1.1 - 2, cy - 4);
+      ctx.lineTo(cx + r*1.1 - 2, cy + 4);
+      ctx.closePath(); ctx.fill();
+      // 抖光
+      ctx.fillStyle = `rgba(255,255,255,${0.4*a})`;
+      ctx.fillRect(cx, cy-2, r*1.1, 4);
+    } else {
+      // 默认剑：弧形刀光
+      ctx.fillStyle = 'rgba(255,255,180,'+ (0.6*a) +')';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, -0.6, 0.6);
+      ctx.lineTo(cx, cy);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r*0.9, -0.4, 0.4);
+      ctx.stroke();
+    }
     ctx.restore();
   },
   shade(hex, amt) {
