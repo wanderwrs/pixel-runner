@@ -1514,9 +1514,9 @@ const Game = {
   particles: [], floatTexts: [], screenShake: 0, flash: 0,
   // 背景滚动
   scrollX: 0,
-  // 速度曲线
-  get BASE_SPEED() { return 300; },   // px/s
-  get MAX_SPEED()  { return 900; },
+  // 速度曲线（倍速标定已翻倍：新 5.0x = 750px/s = 旧 2.5x；初速减半更易上手）
+  get BASE_SPEED() { return 150; },   // px/s
+  get MAX_SPEED()  { return 750; },
   get ACCEL()      { return 2.2; },    // 每秒速度增加（保留，仅在技能时保留引用）
   get GRAVITY()    { return 1800; },
   get GROUND_Y()   { return this.H - 80; },
