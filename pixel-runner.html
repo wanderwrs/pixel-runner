@@ -2091,13 +2091,19 @@ const Game = {
   // 生成一个随机掉落道具
   spawnPowerup() {
     const W = this.W, gy = this.GROUND_Y;
-    const types = ['plane','missile','nuke'];
-    // nuke 略稀有：30% 其它 35/35
+    const s = this.session;
     let type; const r = Math.random();
-    if (r < 0.40) type = 'plane';
-    else if (r < 0.80) type = 'missile';
-    else type = 'nuke';
-    // 高度：飞机可在空中、导弹/核弹随机地面或低平台
+    // 生命恢复道具：仅在未满血时有几率掉落（约 12%）
+    if (s.hp < s.maxHp && r < 0.12) {
+      type = 'heart';
+    } else {
+      // nuke 略稀有：plane 40% / missile 40% / nuke 20%
+      const r2 = Math.random();
+      if (r2 < 0.40) type = 'plane';
+      else if (r2 < 0.80) type = 'missile';
+      else type = 'nuke';
+    }
+    // 高度：飞机可在空中、导弹/核弹/心心随机地面或低平台
     let y; const useAir = (type === 'plane') ? (Math.random()<0.5) : (Math.random()<0.3);
     if (useAir) y = gy - (120 + Math.random()*120);  // 空中 120~240
     else       y = gy - 56 - Math.random()*30;       // 地面贴地 26~56
@@ -2108,6 +2114,19 @@ const Game = {
   // 拾取并激活道具效果
   pickupPowerup(pw) {
     const s = this.session; const p = this.player;
+    // 心心：立即恢复 1 格生命（一次性道具，不进入 activePowerup）
+    if (pw.type === 'heart') {
+      if (s.hp >= s.maxHp) {
+        // 满血时改为奖励金币，避免浪费
+        s.coins += 5; s.runCoins += 5;
+        this.floatText(p.x, p.y - 30, '+5💰', '#ffe060');
+      } else {
+        s.hp = Math.min(s.maxHp, s.hp + 1);
+        this.floatText(p.x, p.y - 30, '+1❤', '#ff5588');
+      }
+      this.particles.push(...this.makeSparkle(p.x+p.w/2, p.y, 24, '#ff5588'));
+      return;
+    }
     // 若已有同类道具，延长时间
     if (s.activePowerup && s.activePowerup.type === pw.type) {
       const dur = pw.type === 'plane' ? 30 : 15;
@@ -4412,23 +4431,25 @@ const Render = {
   drawPowerup(ctx, pw) {
     const x = pw.x, y = pw.y + Math.sin(pw.t*1.2)*3, w = pw.w, h = pw.h;
     // 发光
-    const glows = { plane:'#80d8ff', missile:'#ff9d40', nuke:'#ff5555' };
+    const glows = { plane:'#80d8ff', missile:'#ff9d40', nuke:'#ff5555', heart:'#ff5588' };
     ctx.save();
     const cx = x+w/2, cy = y+h/2;
-    const grd = ctx.createRadialGradient(cx,cy,2,cx,cy,w);
+    // 心心道具：脉动呼吸光晕
+    const pulse = pw.type === 'heart' ? (0.85 + Math.sin(pw.t*4)*0.15) : 1;
+    const grd = ctx.createRadialGradient(cx,cy,2,cx,cy,w*pulse);
     grd.addColorStop(0, glows[pw.type]+'cc');
     grd.addColorStop(1, glows[pw.type]+'00');
     ctx.fillStyle = grd;
     ctx.fillRect(x-w, y-h, w*3, h*3);
     // 盒子底
-    ctx.fillStyle = '#ffffff22';
+    ctx.fillStyle = pw.type === 'heart' ? 'rgba(255,85,136,0.18)' : '#ffffff22';
     ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.strokeStyle = pw.type === 'heart' ? '#ff88aa' : '#fff'; ctx.lineWidth = 2;
     ctx.strokeRect(x+0.5, y+0.5, w-1, h-1);
     // 内容 emoji 图标
     ctx.font = 'bold 22px system-ui, "Segoe UI Emoji", Arial';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const icon = { plane:'✈', missile:'🚀', nuke:'💣' }[pw.type];
+    const icon = { plane:'✈', missile:'🚀', nuke:'💣', heart:'❤' }[pw.type];
     ctx.fillText(icon, cx, cy+1);
     ctx.restore();
   },
